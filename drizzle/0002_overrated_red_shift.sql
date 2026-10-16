@@ -1,0 +1,1 @@
+ALTER TABLE `profi_collections` ADD `owner_name` text DEFAULT '' NOT NULL;

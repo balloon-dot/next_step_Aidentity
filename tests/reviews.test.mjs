@@ -1,10 +1,10 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {readFileSync} from 'node:fs';
+import {readFileSync,readdirSync} from 'node:fs';
 import {handleApi,CATALOG_VERSION} from '../lib/reviews.mjs';
 const data=()=>({scores:Array(33).fill(10),areas:Array(33).fill(1/33),edited:Array(33).fill(false),qualities:Array.from({length:33},()=>Array(4).fill(15)),qedited:Array.from({length:33},()=>Array(4).fill(false))});
-function database(){let sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync(new URL('../drizzle/0000_illegal_loners.sql',import.meta.url),'utf8'));sqlite.exec(readFileSync(new URL('../drizzle/0001_illegal_scarecrow.sql',import.meta.url),'utf8'));return {prepare(sql){let stmt=sqlite.prepare(sql),args=[];const result={bind(...v){args=v;return result},async first(){return stmt.get(...args)||null},async all(){return {results:stmt.all(...args)}},async run(){return stmt.run(...args)}};return result}}}
+function database(){let sqlite=new DatabaseSync(':memory:');for(let file of readdirSync(new URL('../drizzle/',import.meta.url)).filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync(new URL('../drizzle/'+file,import.meta.url),'utf8'));return {prepare(sql){let stmt=sqlite.prepare(sql),args=[];const result={bind(...v){args=v;return result},async first(){return stmt.get(...args)||null},async all(){return {results:stmt.all(...args)}},async run(){return stmt.run(...args)}};return result}}}
 const userCookies=new WeakMap();
 async function call(db,path,{method='GET',user,cookie,payload,origin='https://profi.test'}={}){let headers={'Content-Type':'application/json',Origin:origin};if(user){let map=userCookies.get(db);if(!map){map=new Map();userCookies.set(db,map)}if(!map.has(user)){let auth=await handleApi(new Request('https://profi.test/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://profi.test'},body:JSON.stringify({login:user,password:'Testing-password-123'})}),db);assert.equal(auth.status,200);map.set(user,auth.headers.get('Set-Cookie').split(';')[0])}headers.Cookie=map.get(user)+(cookie?'; '+cookie:'')}else if(cookie)headers.Cookie=cookie;return handleApi(new Request('https://profi.test'+path,{method,headers,body:payload?JSON.stringify(payload):undefined}),db)}
 async function json(res){let d=await res.json();assert.ok(res.ok,JSON.stringify(d));return d}
@@ -44,4 +44,10 @@ test('Password accounts persist, isolate data, invalidate logout and reject forg
  let logout=await call(db,'/api/auth/logout',{method:'POST',cookie:cookie2,payload:{}});assert.equal(logout.status,200);assert.equal((await json(await call(db,'/api/session',{cookie:cookie2}))).signedIn,false);
  let spoof=await handleApi(new Request('https://profi.test/api/owner/collections',{headers:{'oai-authenticated-user-id':registered.user.id}}),db);assert.equal(spoof.status,401);
  await db.prepare('UPDATE profi_sessions SET expires_at = ? WHERE account_id = ?').bind(0,registered.user.id).run();assert.equal((await json(await call(db,'/api/session',{cookie:authCookie}))).signedIn,false);
+});
+test('Invitation carries only the explicit owner display name and updates the same collection',async()=>{
+ let db=database(),payload={catalogVersion:CATALOG_VERSION,ownerName:'  Ирина   Петрова  ',data:data()};let created=await json(await call(db,'/api/collections',{method:'POST',user:'owner',payload}));assert.equal(created.ownerName,'Ирина Петрова');
+ let publicData=await json(await call(db,'/api/collections/'+created.id));assert.equal(publicData.ownerName,'Ирина Петрова');assert.equal(publicData.login,undefined);assert.equal(publicData.email,undefined);assert.equal(publicData.owner_id,undefined);
+ payload.ownerName='Ирина Сидорова';let updated=await json(await call(db,'/api/collections',{method:'POST',user:'owner',payload}));assert.equal(updated.id,created.id);assert.equal(updated.ownerName,'Ирина Сидорова');assert.deepEqual(updated.baseline,created.baseline);
+ let again=await json(await call(db,'/api/collections/'+created.id));assert.equal(again.ownerName,'Ирина Сидорова');payload.ownerName='<script>alert(1)</script>';assert.equal((await call(db,'/api/collections',{method:'POST',user:'owner',payload})).status,400);
 });
