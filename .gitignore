@@ -1,0 +1,8 @@
+node_modules/
+.sites-runtime/
+.vinext/
+.wrangler/
+dist/
+.env*
+publish.mjs
+.next/

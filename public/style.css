@@ -3,3 +3,7 @@
 
 /* Visible values and direct entry into each cluster. */
 svg .cell-score{font-size:14px;font-weight:800;fill:#315b40}svg .cell-enter{pointer-events:auto;cursor:pointer;font-size:9px;font-weight:700;fill:#356247;text-decoration:underline}svg .cell-enter:hover{fill:#163e25}svg .cell-enter:focus{outline:2px solid #286a52}svg path{touch-action:none}
+
+.button-link{display:inline-block;text-decoration:none;cursor:pointer;line-height:1.6;text-align:center}.comparison-section{margin-bottom:34px}.section-head{display:flex;align-items:center;justify-content:space-between;gap:15px;margin:25px 0 16px}.section-head .eyebrow{margin:0 0 9px}.section-head h2{margin:0}.rating-scroll{max-height:680px;overflow:auto}.collection-picker{max-width:420px;margin:20px 0}.error-text{color:#ac473e;font-size:12px}.people{margin-top:12px}.legend{flex-wrap:wrap}.section-head .primary,.section-head .secondary{flex-shrink:0}@media(max-width:500px){.section-head{align-items:flex-start;flex-direction:column}.section-head .primary{width:100%}.rating-scroll{max-height:380px}}
+
+.header-tools{display:flex;align-items:center;gap:16px}#account-controls{display:flex;align-items:center;gap:12px}.account-button{background:#eaf0e6;color:#376348;font-size:10px;font-weight:700;border-radius:7px;padding:9px 12px}.account-login{font-size:10px;color:#58734e;max-width:130px;overflow:hidden;text-overflow:ellipsis}@media(max-width:600px){.header-tools .save{display:none}.account-login{max-width:90px}}
