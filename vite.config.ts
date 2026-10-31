@@ -8,5 +8,5 @@ export default defineConfig(async()=>{
  process.env.WRANGLER_WRITE_LOGS??='false';
  process.env.WRANGLER_LOG_PATH??='.sites-runtime/wrangler/logs';
  const {cloudflare}=await import('@cloudflare/vite-plugin');
- return {plugins:[vinext(),sites(),cloudflare({viteEnvironment:{name:'rsc',childEnvironments:['ssr']},inspectorPort:false,config:{main:'./build/sites-worker.ts',compatibility_flags:['nodejs_compat'],d1_databases:[{binding:hosting.d1,database_name:'site-creator-d1',database_id:'00000000-0000-4000-8000-000000000000'}]}})]};
+ return {plugins:[vinext(),sites(),cloudflare({viteEnvironment:{name:'rsc',childEnvironments:['ssr']},inspectorPort:false,config:{main:'./build/sites-worker.ts',compatibility_flags:['nodejs_compat'],d1_databases:[{binding:hosting.d1,database_name:'profi-map',database_id:'857b87db-bcde-4616-8fa6-d2fe7b6137c0'}]}})]};
 });
