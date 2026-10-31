@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 function frontend(hash=''){
- let src=readFileSync(new URL('../public/app.js',import.meta.url),'utf8');src=src.slice(0,src.indexOf("document.querySelectorAll('[data-page]').forEach(b=>b.onclick"));
+ const plain=f=>readFileSync(new URL('../public/'+f,import.meta.url),'utf8').replace(/^import .*$/gm,'').replace(/^export /gm,'');
+ const catalog='const {CURRENT_CATALOG_VERSION,LEGACY_CATALOG_VERSION,getCatalog,dataCatalogVersion,validScoreData,freshScoreData}=(()=>{'+plain('profile-taxonomy.js')+'\n'+plain('test-catalog.js')+'\nreturn {CURRENT_CATALOG_VERSION,LEGACY_CATALOG_VERSION,getCatalog,dataCatalogVersion,validScoreData,freshScoreData}})();\n';
+ let src=catalog+plain('app.js');src=src.slice(0,src.indexOf("document.querySelectorAll('[data-page]').forEach(b=>b.onclick"));
  let element={innerHTML:'',textContent:'',style:{},hidden:true,classList:{toggle(){},add(){}},querySelectorAll(){return []},insertAdjacentHTML(){}};
  let context=vm.createContext({structuredClone,URLSearchParams,URL,crypto,btoa,atob,location:{hash,search:'',origin:'https://profi.test'},document:{body:element,querySelector(){return element},querySelectorAll(){return []}},localStorage:{getItem(){return null},setItem(){}},sessionStorage:{getItem(){return null},setItem(){}},setTimeout(){},setInterval(){},console});vm.runInContext(src,context);return context;
 }
