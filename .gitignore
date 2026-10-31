@@ -6,3 +6,6 @@ dist/
 .env*
 publish.mjs
 .next/
+
+# архив истории; после восстановления репозитория не нужен
+SOURCE_HISTORY.bundle

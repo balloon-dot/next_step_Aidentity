@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
 import {handleApi,CATALOG_VERSION} from '../lib/reviews.mjs';
-const data=()=>({scores:Array(33).fill(10),areas:Array(33).fill(1/33),edited:Array(33).fill(false),qualities:Array.from({length:33},()=>Array(4).fill(15)),qedited:Array.from({length:33},()=>Array(4).fill(false))});
-function database(){let sqlite=new DatabaseSync(':memory:');for(let file of readdirSync(new URL('../drizzle/',import.meta.url)).filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync(new URL('../drizzle/'+file,import.meta.url),'utf8'));return {prepare(sql){let stmt=sqlite.prepare(sql),args=[];const result={bind(...v){args=v;return result},async first(){return stmt.get(...args)||null},async all(){return {results:stmt.all(...args)}},async run(){return stmt.run(...args)}};return result}}}
+import {freshScoreData,LEGACY_CATALOG_VERSION} from '../public/test-catalog.js';
+import {normalizeDataset} from '../public/profile-import.js';
+const data=()=>freshScoreData();
+const template=()=>JSON.parse(readFileSync(new URL('../public/profile-import-template.json',import.meta.url),'utf8'));
+function database(){let sqlite=new DatabaseSync(':memory:');for(let file of readdirSync(new URL('../drizzle/',import.meta.url)).filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync(new URL('../drizzle/'+file,import.meta.url),'utf8'));return {prepare(sql){let stmt=sqlite.prepare(sql),args=[];const result={bind(...v){args=v;return result},async first(){return stmt.get(...args)||null},async all(){return {results:stmt.all(...args)}},async run(){return stmt.run(...args)}};return result},async batch(list){sqlite.exec('BEGIN');try{let out=[];for(let s of list)out.push(await s.run());sqlite.exec('COMMIT');return out}catch(e){sqlite.exec('ROLLBACK');throw e}}}}
 const userCookies=new WeakMap();
 async function call(db,path,{method='GET',user,cookie,payload,origin='https://profi.test'}={}){let headers={'Content-Type':'application/json',Origin:origin};if(user){let map=userCookies.get(db);if(!map){map=new Map();userCookies.set(db,map)}if(!map.has(user)){let auth=await handleApi(new Request('https://profi.test/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://profi.test'},body:JSON.stringify({login:user,password:'Testing-password-123'})}),db);assert.equal(auth.status,200);map.set(user,auth.headers.get('Set-Cookie').split(';')[0])}headers.Cookie=map.get(user)+(cookie?'; '+cookie:'')}else if(cookie)headers.Cookie=cookie;return handleApi(new Request('https://profi.test'+path,{method,headers,body:payload?JSON.stringify(payload):undefined}),db)}
 async function json(res){let d=await res.json();assert.ok(res.ok,JSON.stringify(d));return d}
@@ -50,4 +53,37 @@ test('Invitation carries only the explicit owner display name and updates the sa
  let publicData=await json(await call(db,'/api/collections/'+created.id));assert.equal(publicData.ownerName,'Ирина Петрова');assert.equal(publicData.login,undefined);assert.equal(publicData.email,undefined);assert.equal(publicData.owner_id,undefined);
  payload.ownerName='Ирина Сидорова';let updated=await json(await call(db,'/api/collections',{method:'POST',user:'owner',payload}));assert.equal(updated.id,created.id);assert.equal(updated.ownerName,'Ирина Сидорова');assert.deepEqual(updated.baseline,created.baseline);
  let again=await json(await call(db,'/api/collections/'+created.id));assert.equal(again.ownerName,'Ирина Сидорова');payload.ownerName='<script>alert(1)</script>';assert.equal((await call(db,'/api/collections',{method:'POST',user:'owner',payload})).status,400);
+});
+test('New maps use the 33/353 catalog while legacy invitations keep accepting their own shape',async()=>{
+ const db=database(),current=data();assert.equal(current.qualities.flat().length,353);
+ assert.equal((await call(db,'/api/collections',{method:'POST',user:'owner',payload:{catalogVersion:CATALOG_VERSION,data:current}})).status,201);
+ assert.equal((await call(db,'/api/collections',{method:'POST',user:'owner',payload:{catalogVersion:LEGACY_CATALOG_VERSION,data:freshScoreData(LEGACY_CATALOG_VERSION)}})).status,409);
+ assert.equal((await call(db,'/api/collections',{method:'POST',user:'owner',payload:{catalogVersion:CATALOG_VERSION,data:freshScoreData(LEGACY_CATALOG_VERSION)}})).status,400);
+ const ownerId=(await json(await call(db,'/api/session',{user:'owner'}))).user.id,legacy=freshScoreData(LEGACY_CATALOG_VERSION),id=crypto.randomUUID();
+ await db.prepare('INSERT INTO profi_collections (id, owner_id, owner_name, baseline_hash, baseline_json, catalog_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id,ownerId,'',  'legacy',JSON.stringify(legacy),LEGACY_CATALOG_VERSION,Date.now()).run();
+ let invite=await call(db,'/api/collections/'+id),cookie=invite.headers.get('Set-Cookie').split(';')[0];assert.equal((await invite.json()).catalogVersion,LEGACY_CATALOG_VERSION);
+ assert.equal((await call(db,'/api/collections/'+id+'/reviews',{method:'POST',cookie,payload:{catalogVersion:CATALOG_VERSION,firstName:'Анна',lastName:'Смирнова',data:current}})).status,409);
+ assert.equal((await call(db,'/api/collections/'+id+'/reviews',{method:'POST',cookie,payload:{catalogVersion:LEGACY_CATALOG_VERSION,firstName:'Анна',lastName:'Смирнова',data:legacy}})).status,201);
+});
+test('Profile cabinet: admin-only import, upsert by candidate_id, stable share link and public view',async()=>{
+ const db=database(),raw=template(),dataset=normalizeDataset(raw);
+ assert.equal((await call(db,'/api/admin/profiles')).status,401);
+ assert.equal((await json(await call(db,'/api/session',{user:'regular'}))).user.role,'user');
+ assert.equal((await call(db,'/api/admin/profiles',{user:'regular'})).status,403);
+ assert.equal((await call(db,'/api/admin/import',{method:'POST',user:'regular',payload:{filename:'x.json',dataset}})).status,403);
+ await call(db,'/api/session',{user:'boss'});await db.prepare("UPDATE profi_accounts SET role = 'admin' WHERE login = ?").bind('boss').run();
+ assert.equal((await json(await call(db,'/api/session',{user:'boss'}))).user.role,'admin');
+ let broken=structuredClone(raw);broken.profiles[0].voronoi.clusters.pop();let rejected=await call(db,'/api/admin/import',{method:'POST',user:'boss',payload:{filename:'bad.json',dataset:broken}});assert.equal(rejected.status,400);let rejection=await rejected.json();assert.ok(Array.isArray(rejection.errors)&&rejection.errors.length>0);
+ let first=await json(await call(db,'/api/admin/import',{method:'POST',user:'boss',payload:{filename:'t.json',dataset}}));assert.deepEqual(first,{imported:1,created:1,updated:0});
+ let list=(await json(await call(db,'/api/admin/profiles',{user:'boss'}))).profiles;assert.equal(list.length,1);assert.equal(list[0].candidateId,dataset.profiles[0].candidate_id);assert.equal(list[0].shareId,null);
+ let link=await json(await call(db,'/api/admin/profiles/'+list[0].id+'/link',{method:'POST',user:'boss',payload:{}}));assert.match(link.shareId,/^[0-9a-f]{32}$/);
+ assert.equal((await json(await call(db,'/api/admin/profiles/'+list[0].id+'/link',{method:'POST',user:'boss',payload:{}}))).shareId,link.shareId);
+ let changed=structuredClone(dataset);changed.profiles[0].status='Обновлен';let second=await json(await call(db,'/api/admin/import',{method:'POST',user:'boss',payload:{filename:'t.json',dataset:changed}}));assert.deepEqual(second,{imported:1,created:0,updated:1});
+ let detail=await json(await call(db,'/api/admin/profiles/'+list[0].id,{user:'boss'}));assert.equal(detail.id,list[0].id);assert.equal(detail.shareId,link.shareId);assert.equal(detail.profile.status,'Обновлен');assert.equal(detail.profile.voronoi.clusters.length,33);assert.equal(detail.metadata.dataset,dataset.metadata.dataset);
+ let shown=await json(await call(db,'/api/profile-views/'+link.shareId));assert.equal(shown.profile.status,'Обновлен');assert.equal(shown.id,undefined);assert.ok(shown.metadata);
+ await call(db,'/api/session',{user:'other'});await db.prepare("UPDATE profi_accounts SET role = 'admin' WHERE login = ?").bind('other').run();
+ assert.equal((await call(db,'/api/admin/profiles/'+list[0].id,{user:'other'})).status,404);assert.equal((await json(await call(db,'/api/admin/profiles',{user:'other'}))).profiles.length,0);
+ assert.equal((await call(db,'/api/admin/profiles/'+list[0].id+'/link',{method:'DELETE',user:'boss',payload:{},origin:'https://evil.test'})).status,403);
+ assert.equal((await json(await call(db,'/api/admin/profiles/'+list[0].id+'/link',{method:'DELETE',user:'boss',payload:{}}))).shareId,null);
+ assert.equal((await call(db,'/api/profile-views/'+link.shareId)).status,404);assert.equal((await call(db,'/api/profile-views/not-a-token')).status,404);
 });
