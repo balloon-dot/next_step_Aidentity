@@ -14,3 +14,6 @@ svg .cell-score{font-size:14px;font-weight:800;fill:#315b40}svg .cell-enter{poin
 
 .admin-cabinet-link[hidden]{display:none}
 .cluster-title{overflow-wrap:anywhere;line-height:1.35}.quality h3{line-height:1.5;overflow-wrap:anywhere}.quality .stepper{margin:12px 0}.dialog h1{overflow-wrap:anywhere;line-height:1.35}.previous-test{max-width:850px}.catalog-notice{margin-top:20px}.intro .pill{line-height:1.7}svg .cell-label{font-size:10px}
+.weight-tools{margin-top:12px}.weight-tools label{display:flex;flex-direction:column;align-items:center;gap:3px;margin:0;font-size:9px;color:#9aa291;letter-spacing:0}
+.weight-tools input[type=number]{width:110px;border:0;background:transparent;text-align:center;font-family:inherit;font-size:28px;font-weight:600;line-height:1.1;color:var(--ink);padding:0;-moz-appearance:textfield}.weight-tools input[type=number]::-webkit-inner-spin-button,.weight-tools input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.weight-tools input[type=number]:focus{outline:2px solid #cfdcc6;outline-offset:3px;border-radius:6px}
+.weight-tools input[type=range]{width:100%;margin:14px 0 0;accent-color:var(--green);height:22px;cursor:pointer}.weight-tools .scale{margin-top:4px}
