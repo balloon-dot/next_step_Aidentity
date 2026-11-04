@@ -29,6 +29,9 @@ let shared=null,shareError=false;const snapshotParam=new URLSearchParams(locatio
 if(snapshotParam){try{const p=JSON.parse(atob(snapshotParam)),data=upgradeData({scores:p.s,areas:p.s?.map(v=>v/TOTAL_WEIGHT),edited:p.e,qualities:p.q,qedited:p.z}),version=currentVersionOf(p.v)||dataCatalogVersion(data);if(!validScoreData(data,version))throw Error('invalid');shared=data;useCatalog(version)}catch{shareError=true}}
 const fmt=v=>Number(v).toLocaleString('ru-RU',{maximumFractionDigits:1});
 let page=new URLSearchParams(location.search).get('view')||'map',selected=null,method='manual',resultTab='self',rating=new URLSearchParams(location.hash.slice(1)).get('invite')||new URLSearchParams(location.hash.slice(1)).get('evaluate'),guest=fresh(),guestDone=false,polygons=[],drag=null,repaintDiagram=null,inside=null;
+// The mode (own map, invitation, shared snapshot) is read from the hash only on load. Pasting an invite link into
+// an open tab changes just the hash without a reload, so reload when the link points somewhere else.
+globalThis.addEventListener?.('hashchange',()=>{const p=new URLSearchParams(location.hash.slice(1));if((p.get('invite')||p.get('evaluate')||null)!==(rating||null)||p.get('result')!==snapshotParam)location.reload()});
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const remote={user:null,signedIn:false,loading:true,error:'',collections:[],active:null,summary:null};
 const invitation={ownerName:'',baseline:null,loading:!!rating,error:'',started:false,firstName:'',lastName:'',isOwner:false,alreadySubmitted:false};
