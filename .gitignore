@@ -9,3 +9,5 @@ publish.mjs
 
 # архив истории; после восстановления репозитория не нужен
 SOURCE_HISTORY.bundle
+
+.claude/settings.local.json
