@@ -45,3 +45,5 @@ svg .cell-score{font-size:14px;font-weight:800;fill:#315b40}svg .cell-enter{poin
 .pyr-side i{height:10px}.pyr-side{min-height:14px}
 .pyr-legend .pyr-side.self{padding-right:8px}.pyr-legend .pyr-side.friends{padding-left:8px}.pyr-ticks.friends span:first-child{display:none}.pyr-ticks.self span:first-child{transform:translateX(50%)}
 }
+.compare-bar .collection-picker{display:flex;align-items:center;gap:10px;margin:0;flex:0 1 auto;white-space:nowrap}.compare-bar .collection-picker select{min-width:0;width:auto;max-width:420px;margin:0;padding:10px 12px}.compare-maps .external-header{margin-top:16px}
+@media(max-width:600px){.compare-bar .collection-picker{flex-direction:column;align-items:stretch;gap:4px;width:100%}.compare-bar .collection-picker select{max-width:none;width:100%}}
