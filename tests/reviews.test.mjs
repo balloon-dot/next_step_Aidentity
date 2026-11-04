@@ -7,8 +7,8 @@ import {freshScoreData,getCatalog,TOTAL_WEIGHT,LEGACY_CATALOG_VERSION,PREVIOUS_C
 import {normalizeDataset} from '../public/profile-import.js';
 import {PREVIOUS_TAXONOMY} from '../public/profile-taxonomy-353.js';
 const data=()=>freshScoreData();
-// Moves x points from the first quality of cluster 2 to the first quality of cluster 1, keeping every sum intact.
-const moved=x=>{const d=data();d.qualities[0][0]+=x;d.qualities[1][0]-=x;d.scores[0]+=x;d.scores[1]-=x;d.areas=d.scores.map(v=>v/TOTAL_WEIGHT);return d};
+// Moves x points from cluster 2 to cluster 1 and, inside cluster 1, from its second quality to its first.
+const moved=x=>{const d=data();d.scores[0]+=x;d.scores[1]-=x;d.areas=d.scores.map(v=>v/TOTAL_WEIGHT);d.qualities[0][0]+=x;d.qualities[0][1]-=x;return d};
 const template=()=>JSON.parse(readFileSync(new URL('../public/profile-import-template.json',import.meta.url),'utf8'));
 function database(){let sqlite=new DatabaseSync(':memory:');for(let file of readdirSync(new URL('../drizzle/',import.meta.url)).filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync(new URL('../drizzle/'+file,import.meta.url),'utf8'));return {prepare(sql){let stmt=sqlite.prepare(sql),args=[];const result={bind(...v){args=v;return result},async first(){return stmt.get(...args)||null},async all(){return {results:stmt.all(...args)}},async run(){return stmt.run(...args)}};return result},async batch(list){sqlite.exec('BEGIN');try{let out=[];for(let s of list)out.push(await s.run());sqlite.exec('COMMIT');return out}catch(e){sqlite.exec('ROLLBACK');throw e}}}}
 const userCookies=new WeakMap();
@@ -25,11 +25,11 @@ test('Two independent reviewers, private threshold, mean and immutable baseline'
  let one=await json(await call(db,path+'/summary',{user:'owner'}));assert.equal(one.count,1);assert.equal(one.aggregate,null);assert.equal(one.reviewers[0].firstName,'Анна');assert.equal((await call(db,path+'/summary')).status,401);assert.equal((await call(db,path+'/summary',{user:'stranger'})).status,404);
  let initB=await call(db,path),cookieB=initB.headers.get('Set-Cookie').split(';')[0],second=moved(-10);
  assert.equal((await call(db,path+'/reviews',{method:'POST',cookie:cookieB,payload:{catalogVersion:CATALOG_VERSION,firstName:'Михаил',lastName:'Волков',data:second}})).status,201);
- let two=await json(await call(db,path+'/summary',{user:'owner'}));assert.equal(two.count,2);assert.equal(two.aggregate.scores[0],610);assert.equal(two.aggregate.qualities[0][0],60);assert.equal(two.aggregate.areas[0],610/TOTAL_WEIGHT);assert.equal(two.reviewers.length,2);
+ let two=await json(await call(db,path+'/summary',{user:'owner'}));assert.equal(two.count,2);assert.equal(two.aggregate.scores[0],60);assert.equal(two.aggregate.qualities[0][0],60);assert.equal(two.aggregate.areas[0],60/TOTAL_WEIGHT);assert.equal(two.reviewers.length,2);
  let baselineAgain=await json(await call(db,path));assert.deepEqual(baselineAgain.baseline,create.baseline);
  let thirdCookie=(await call(db,path)).headers.get('Set-Cookie').split(';')[0];assert.equal((await call(db,path+'/reviews',{method:'POST',cookie:cookieA,payload:{catalogVersion:CATALOG_VERSION,firstName:'Другое',lastName:'Имя',data:first}})).status,409);assert.equal((await call(db,path+'/reviews',{method:'POST',cookie:thirdCookie,payload:{catalogVersion:CATALOG_VERSION,firstName:'анна',lastName:'смирнова',data:first}})).status,409);
  let revisited=await json(await call(db,path,{cookie:cookieA}));assert.equal(revisited.alreadySubmitted,true);
- assert.equal((await call(db,path+'/reviews',{method:'POST',cookie:thirdCookie,payload:{catalogVersion:CATALOG_VERSION,firstName:'Елена',lastName:'Кузнецова',data:original}})).status,201);let three=await json(await call(db,path+'/summary',{user:'owner'}));assert.equal(three.count,3);assert.equal(three.aggregate.scores[0],620);assert.equal(three.aggregate.qualities[0][0],70);
+ assert.equal((await call(db,path+'/reviews',{method:'POST',cookie:thirdCookie,payload:{catalogVersion:CATALOG_VERSION,firstName:'Елена',lastName:'Кузнецова',data:original}})).status,201);let three=await json(await call(db,path+'/summary',{user:'owner'}));assert.equal(three.count,3);assert.equal(three.aggregate.scores[0],70);assert.equal(three.aggregate.qualities[0][0],70);
 });
 test('Server rejects missing identity, names, bad data, cross-origin and owner self-review',async()=>{
  let db=database(),payload={catalogVersion:CATALOG_VERSION,data:data()};assert.equal((await call(db,'/api/collections',{method:'POST',payload})).status,401);assert.equal((await call(db,'/api/collections',{method:'POST',user:'owner',payload,origin:'https://evil.test'})).status,403);
@@ -90,12 +90,12 @@ test('Profile cabinet: admin-only import, upsert by candidate_id, stable share l
  assert.equal((await json(await call(db,'/api/admin/profiles/'+list[0].id+'/link',{method:'DELETE',user:'boss',payload:{}}))).shareId,null);
  assert.equal((await call(db,'/api/profile-views/'+link.shareId)).status,404);assert.equal((await call(db,'/api/profile-views/not-a-token')).status,404);
 });
-test('Untouched collections stored on the old 330-point budget open with the new starting weights',async()=>{
+test('Collections stored on the old 330-point budget keep their shares on the 1650 budget',async()=>{
  const db=database(),ownerId=(await json(await call(db,'/api/session',{user:'owner'}))).user.id,old=data();old.scores=old.scores.map(()=>10);old.areas=old.scores.map(v=>v/330);const id=crypto.randomUUID();
  await db.prepare('INSERT INTO profi_collections (id, owner_id, owner_name, baseline_hash, baseline_json, catalog_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id,ownerId,'','old',JSON.stringify(old),CATALOG_VERSION,Date.now()).run();
  for(let n of ['a','b'])await db.prepare('INSERT INTO profi_reviews (id, collection_id, first_name, last_name, name_key, device_key, data_json, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(),id,'Имя','Фамилия',n,n,JSON.stringify(old),Date.now()).run();
- let invite=await json(await call(db,'/api/collections/'+id));assert.equal(invite.baseline.scores[0],600);assert.equal(invite.baseline.areas[0],600/TOTAL_WEIGHT);assert.ok(invite.baseline.qualities.flat().every(v=>v===50));
- let summary=await json(await call(db,'/api/collections/'+id+'/summary',{user:'owner'}));assert.equal(summary.aggregate.scores[0],600);
+ let invite=await json(await call(db,'/api/collections/'+id));assert.equal(invite.baseline.scores[0],50);assert.equal(invite.baseline.areas[0],50/TOTAL_WEIGHT);assert.ok(invite.baseline.qualities.flat().every(v=>v===50));
+ let summary=await json(await call(db,'/api/collections/'+id+'/summary',{user:'owner'}));assert.equal(summary.aggregate.scores[0],50);
 });
 // Old 353-quality data whose every score is the quality's position, so the test can see where each value landed.
 const previousMap=()=>({scores:Array(33).fill(50),areas:Array(33).fill(1/33),edited:Array(33).fill(true),qualities:PREVIOUS_TAXONOMY.map(c=>c.qualities.map((_,qi)=>qi+1)),qedited:PREVIOUS_TAXONOMY.map(c=>c.qualities.map(()=>false))});
@@ -109,7 +109,7 @@ test('Invitations saved on the 353-quality list are served, reviewed and average
  assert.equal(invite.catalogVersion,CATALOG_VERSION);assert.deepEqual(invite.baseline.qualities.map(q=>q.length),catalog.clusters.map(c=>c.qualities.length));
  // Each cluster keeps its old share, split between qualities by their old scores; loyalty moved from cluster 13 to 4 and the reality item was renamed.
  const was=name=>previousScore(name==='неприятие реальности'?'непринятие реальности':name);
- catalog.clusters.forEach((c,ci)=>{assert.ok(Math.abs(invite.baseline.scores[ci]-TOTAL_WEIGHT/33)<1e-6);const whole=c.qualities.reduce((n,q)=>n+was(q.name),0);c.qualities.forEach((q,qi)=>assert.ok(Math.abs(invite.baseline.qualities[ci][qi]/invite.baseline.scores[ci]-was(q.name)/whole)<1e-9,q.name))});
+ catalog.clusters.forEach((c,ci)=>{assert.ok(Math.abs(invite.baseline.scores[ci]-TOTAL_WEIGHT/33)<1e-6);const whole=c.qualities.reduce((n,q)=>n+was(q.name),0);c.qualities.forEach((q,qi)=>assert.ok(Math.abs(invite.baseline.qualities[ci][qi]/(50*c.qualities.length)-was(q.name)/whole)<1e-9,q.name))});
  assert.equal((await call(db,'/api/collections/'+id+'/reviews',{method:'POST',cookie,payload:{catalogVersion:CATALOG_VERSION,firstName:'Анна',lastName:'Смирнова',data:data()}})).status,201);
  let summary=await json(await call(db,'/api/collections/'+id+'/summary',{user:'owner'}));assert.equal(summary.count,2);assert.equal(summary.aggregate.qualities.flat().length,283);
  assert.ok(Math.abs(summary.aggregate.qualities[0][0]-(invite.baseline.qualities[0][0]+50)/2)<1e-9);

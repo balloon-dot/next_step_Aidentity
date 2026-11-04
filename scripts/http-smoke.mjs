@@ -7,8 +7,8 @@ let log='';worker.stdout.on('data',v=>log+=v);worker.stderr.on('data',v=>log+=v)
 const jars={owner:'',a:'',b:''};
 async function request(path,{method='GET',jar='owner',body}={}){let r=await fetch(origin+path,{method,headers:{Origin:origin,'Content-Type':'application/json',Cookie:jars[jar]},body:body?JSON.stringify(body):undefined});let cookies=r.headers.getSetCookie();for(let cookie of cookies){let pair=cookie.split(';')[0],name=pair.split('=')[0];jars[jar]=jars[jar].split('; ').filter(c=>!c.startsWith(name+'=')).concat(pair).filter(Boolean).join('; ')}return r}
 const data=()=>{let d=freshScoreData();d.edited=d.edited.map(()=>true);d.qedited=d.qedited.map(q=>q.map(()=>true));return d};
-// Moves x points between two qualities; when they sit in different clusters the cluster weights follow.
-const move=(d,[ci,qi],[cj,qj],x)=>{d.qualities[ci][qi]-=x;d.qualities[cj][qj]+=x;d.scores[ci]-=x;d.scores[cj]+=x;d.areas=d.scores.map(v=>v/TOTAL_WEIGHT);return d};
+// Moves x points from cluster 2 to cluster 1 and y points between the first two qualities of cluster 1.
+const move=(d,x,y)=>{d.scores[0]+=x;d.scores[1]-=x;d.areas=d.scores.map(v=>v/TOTAL_WEIGHT);d.qualities[0][0]+=y;d.qualities[0][1]-=y;return d};
 try{
  let deadline=Date.now()+30000;while(!log.includes('Ready on')){if(Date.now()>deadline)throw Error('Local server did not start: '+log.slice(-1800));await new Promise(r=>setTimeout(r,200))}
  assert.equal((await request('/')).status,200);for(let asset of ['/app.js','/test-catalog.js','/profile-taxonomy.js','/profile-taxonomy-353.js','/admin','/view/'+'0'.repeat(32),'/profiles-admin.js','/profile-import.js','/profile-voronoi.js','/profile-import-template.json'])assert.equal((await request(asset)).status,200,asset);
@@ -17,11 +17,11 @@ try{
  let created=await request('/api/collections',{method:'POST',body:{catalogVersion,ownerName:'Виктория Тестовая',data:data()}});assert.equal(created.status,201,await created.clone().text());let {id}=await created.json();
  const path='/api/collections/'+id;
  let first=await request(path,{jar:'a'});assert.equal(first.status,200);let invited=await first.json();assert.deepEqual(invited.baseline.scores,data().scores);assert.equal(invited.ownerName,'Виктория Тестовая');
- let firstData=move(data(),[1,0],[0,0],30);
+ let firstData=move(data(),30,30);
  assert.equal((await request(path+'/reviews',{jar:'a',method:'POST',body:{catalogVersion,firstName:'Анна',lastName:'Тестовая',data:firstData}})).status,201);
  let one=await request(path+'/summary');assert.equal(one.status,200,await one.clone().text());let summary=await one.json();assert.equal(summary.count,1);assert.equal(summary.aggregate,null);
- await request(path,{jar:'b'});let secondData=move(data(),[0,0],[0,1],20);assert.equal((await request(path+'/reviews',{jar:'b',method:'POST',body:{catalogVersion,firstName:'Михаил',lastName:'Тестовый',data:secondData}})).status,201);
- let two=await (await request(path+'/summary')).json();assert.equal(two.count,2);assert.equal(two.aggregate.scores[0],615);assert.equal(two.aggregate.qualities[0][0],55);assert.equal(two.reviewers.length,2);
+ await request(path,{jar:'b'});let secondData=move(data(),0,-20);assert.equal((await request(path+'/reviews',{jar:'b',method:'POST',body:{catalogVersion,firstName:'Михаил',lastName:'Тестовый',data:secondData}})).status,201);
+ let two=await (await request(path+'/summary')).json();assert.equal(two.count,2);assert.equal(two.aggregate.scores[0],65);assert.equal(two.aggregate.qualities[0][0],55);assert.equal(two.reviewers.length,2);
  assert.equal((await request(path+'/summary',{jar:'a'})).status,401);
  assert.equal((await request('/api/admin/profiles')).status,403);assert.equal((await request('/api/admin/profiles/'+crypto.randomUUID()+'/link',{method:'DELETE',body:{}})).status,403);assert.equal((await (await request('/api/session')).json()).user.role,'user');
  await request('/api/auth/logout',{method:'POST',body:{}});assert.equal((await (await request('/api/session')).json()).signedIn,false);
