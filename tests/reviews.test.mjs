@@ -3,30 +3,33 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
 import {handleApi,CATALOG_VERSION} from '../lib/reviews.mjs';
-import {freshScoreData,LEGACY_CATALOG_VERSION} from '../public/test-catalog.js';
+import {freshScoreData,getCatalog,TOTAL_WEIGHT,LEGACY_CATALOG_VERSION,PREVIOUS_CATALOG_VERSION} from '../public/test-catalog.js';
 import {normalizeDataset} from '../public/profile-import.js';
+import {PREVIOUS_TAXONOMY} from '../public/profile-taxonomy-353.js';
 const data=()=>freshScoreData();
+// Moves x points from the first quality of cluster 2 to the first quality of cluster 1, keeping every sum intact.
+const moved=x=>{const d=data();d.qualities[0][0]+=x;d.qualities[1][0]-=x;d.scores[0]+=x;d.scores[1]-=x;d.areas=d.scores.map(v=>v/TOTAL_WEIGHT);return d};
 const template=()=>JSON.parse(readFileSync(new URL('../public/profile-import-template.json',import.meta.url),'utf8'));
 function database(){let sqlite=new DatabaseSync(':memory:');for(let file of readdirSync(new URL('../drizzle/',import.meta.url)).filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync(new URL('../drizzle/'+file,import.meta.url),'utf8'));return {prepare(sql){let stmt=sqlite.prepare(sql),args=[];const result={bind(...v){args=v;return result},async first(){return stmt.get(...args)||null},async all(){return {results:stmt.all(...args)}},async run(){return stmt.run(...args)}};return result},async batch(list){sqlite.exec('BEGIN');try{let out=[];for(let s of list)out.push(await s.run());sqlite.exec('COMMIT');return out}catch(e){sqlite.exec('ROLLBACK');throw e}}}}
 const userCookies=new WeakMap();
 async function call(db,path,{method='GET',user,cookie,payload,origin='https://profi.test'}={}){let headers={'Content-Type':'application/json',Origin:origin};if(user){let map=userCookies.get(db);if(!map){map=new Map();userCookies.set(db,map)}if(!map.has(user)){let auth=await handleApi(new Request('https://profi.test/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://profi.test'},body:JSON.stringify({login:user,password:'Testing-password-123'})}),db);assert.equal(auth.status,200);map.set(user,auth.headers.get('Set-Cookie').split(';')[0])}headers.Cookie=map.get(user)+(cookie?'; '+cookie:'')}else if(cookie)headers.Cookie=cookie;return handleApi(new Request('https://profi.test'+path,{method,headers,body:payload?JSON.stringify(payload):undefined}),db)}
 async function json(res){let d=await res.json();assert.ok(res.ok,JSON.stringify(d));return d}
 test('Two independent reviewers, private threshold, mean and immutable baseline',async()=>{
- const db=database(),original=data();original.scores[0]=100;for(let i=1;i<33;i++)original.scores[i]=1550/32;original.edited[0]=true;original.qualities[0][0]=24;original.qedited[0][0]=true;
+ const db=database(),original=moved(40);original.edited[0]=true;original.qedited[0][0]=true;
  let create=await json(await call(db,'/api/collections',{method:'POST',user:'owner',payload:{catalogVersion:CATALOG_VERSION,data:original}}));let path='/api/collections/'+create.id;
  assert.deepEqual(create.baseline.scores,original.scores);
  let duplicate=await json(await call(db,'/api/collections',{method:'POST',user:'owner',payload:{catalogVersion:CATALOG_VERSION,data:original}}));assert.equal(duplicate.id,create.id);
  let initA=await call(db,path),cookieA=initA.headers.get('Set-Cookie').split(';')[0],publicData=await json(initA);assert.deepEqual(publicData.baseline.scores,original.scores);assert.equal(publicData.reviewers,undefined);assert.equal(publicData.owner_id,undefined);
- let first=data();first.scores[0]=130;for(let i=1;i<33;i++)first.scores[i]=1520/32;first.qualities[0][0]=30;
+ let first=moved(30);
  assert.equal((await call(db,path+'/reviews',{method:'POST',cookie:cookieA,payload:{catalogVersion:CATALOG_VERSION,firstName:'Анна',lastName:'Смирнова',data:first}})).status,201);
  let one=await json(await call(db,path+'/summary',{user:'owner'}));assert.equal(one.count,1);assert.equal(one.aggregate,null);assert.equal(one.reviewers[0].firstName,'Анна');assert.equal((await call(db,path+'/summary')).status,401);assert.equal((await call(db,path+'/summary',{user:'stranger'})).status,404);
- let initB=await call(db,path),cookieB=initB.headers.get('Set-Cookie').split(';')[0],second=data();second.scores[0]=70;for(let i=1;i<33;i++)second.scores[i]=1580/32;second.qualities[0][0]=10;
+ let initB=await call(db,path),cookieB=initB.headers.get('Set-Cookie').split(';')[0],second=moved(-10);
  assert.equal((await call(db,path+'/reviews',{method:'POST',cookie:cookieB,payload:{catalogVersion:CATALOG_VERSION,firstName:'Михаил',lastName:'Волков',data:second}})).status,201);
- let two=await json(await call(db,path+'/summary',{user:'owner'}));assert.equal(two.count,2);assert.equal(two.aggregate.scores[0],100);assert.equal(two.aggregate.qualities[0][0],20);assert.equal(two.aggregate.areas[0],100/1650);assert.equal(two.reviewers.length,2);
+ let two=await json(await call(db,path+'/summary',{user:'owner'}));assert.equal(two.count,2);assert.equal(two.aggregate.scores[0],610);assert.equal(two.aggregate.qualities[0][0],60);assert.equal(two.aggregate.areas[0],610/TOTAL_WEIGHT);assert.equal(two.reviewers.length,2);
  let baselineAgain=await json(await call(db,path));assert.deepEqual(baselineAgain.baseline,create.baseline);
  let thirdCookie=(await call(db,path)).headers.get('Set-Cookie').split(';')[0];assert.equal((await call(db,path+'/reviews',{method:'POST',cookie:cookieA,payload:{catalogVersion:CATALOG_VERSION,firstName:'Другое',lastName:'Имя',data:first}})).status,409);assert.equal((await call(db,path+'/reviews',{method:'POST',cookie:thirdCookie,payload:{catalogVersion:CATALOG_VERSION,firstName:'анна',lastName:'смирнова',data:first}})).status,409);
  let revisited=await json(await call(db,path,{cookie:cookieA}));assert.equal(revisited.alreadySubmitted,true);
- assert.equal((await call(db,path+'/reviews',{method:'POST',cookie:thirdCookie,payload:{catalogVersion:CATALOG_VERSION,firstName:'Елена',lastName:'Кузнецова',data:original}})).status,201);let three=await json(await call(db,path+'/summary',{user:'owner'}));assert.equal(three.count,3);assert.equal(three.aggregate.scores[0],100);assert.ok(Math.abs(three.aggregate.qualities[0][0]-64/3)<1e-9);
+ assert.equal((await call(db,path+'/reviews',{method:'POST',cookie:thirdCookie,payload:{catalogVersion:CATALOG_VERSION,firstName:'Елена',lastName:'Кузнецова',data:original}})).status,201);let three=await json(await call(db,path+'/summary',{user:'owner'}));assert.equal(three.count,3);assert.equal(three.aggregate.scores[0],620);assert.equal(three.aggregate.qualities[0][0],70);
 });
 test('Server rejects missing identity, names, bad data, cross-origin and owner self-review',async()=>{
  let db=database(),payload={catalogVersion:CATALOG_VERSION,data:data()};assert.equal((await call(db,'/api/collections',{method:'POST',payload})).status,401);assert.equal((await call(db,'/api/collections',{method:'POST',user:'owner',payload,origin:'https://evil.test'})).status,403);
@@ -54,8 +57,8 @@ test('Invitation carries only the explicit owner display name and updates the sa
  payload.ownerName='Ирина Сидорова';let updated=await json(await call(db,'/api/collections',{method:'POST',user:'owner',payload}));assert.equal(updated.id,created.id);assert.equal(updated.ownerName,'Ирина Сидорова');assert.deepEqual(updated.baseline,created.baseline);
  let again=await json(await call(db,'/api/collections/'+created.id));assert.equal(again.ownerName,'Ирина Сидорова');payload.ownerName='<script>alert(1)</script>';assert.equal((await call(db,'/api/collections',{method:'POST',user:'owner',payload})).status,400);
 });
-test('New maps use the 33/353 catalog while legacy invitations keep accepting their own shape',async()=>{
- const db=database(),current=data();assert.equal(current.qualities.flat().length,353);
+test('New maps use the 33/283 catalog while legacy invitations keep accepting their own shape',async()=>{
+ const db=database(),current=data();assert.equal(current.qualities.flat().length,283);
  assert.equal((await call(db,'/api/collections',{method:'POST',user:'owner',payload:{catalogVersion:CATALOG_VERSION,data:current}})).status,201);
  assert.equal((await call(db,'/api/collections',{method:'POST',user:'owner',payload:{catalogVersion:LEGACY_CATALOG_VERSION,data:freshScoreData(LEGACY_CATALOG_VERSION)}})).status,409);
  assert.equal((await call(db,'/api/collections',{method:'POST',user:'owner',payload:{catalogVersion:CATALOG_VERSION,data:freshScoreData(LEGACY_CATALOG_VERSION)}})).status,400);
@@ -87,10 +90,38 @@ test('Profile cabinet: admin-only import, upsert by candidate_id, stable share l
  assert.equal((await json(await call(db,'/api/admin/profiles/'+list[0].id+'/link',{method:'DELETE',user:'boss',payload:{}}))).shareId,null);
  assert.equal((await call(db,'/api/profile-views/'+link.shareId)).status,404);assert.equal((await call(db,'/api/profile-views/not-a-token')).status,404);
 });
-test('Collections stored on the 330-point scale are served and averaged on the 1650 scale',async()=>{
+test('Untouched collections stored on the old 330-point budget open with the new starting weights',async()=>{
  const db=database(),ownerId=(await json(await call(db,'/api/session',{user:'owner'}))).user.id,old=data();old.scores=old.scores.map(()=>10);old.areas=old.scores.map(v=>v/330);const id=crypto.randomUUID();
  await db.prepare('INSERT INTO profi_collections (id, owner_id, owner_name, baseline_hash, baseline_json, catalog_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id,ownerId,'','old',JSON.stringify(old),CATALOG_VERSION,Date.now()).run();
  for(let n of ['a','b'])await db.prepare('INSERT INTO profi_reviews (id, collection_id, first_name, last_name, name_key, device_key, data_json, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(),id,'Имя','Фамилия',n,n,JSON.stringify(old),Date.now()).run();
- let invite=await json(await call(db,'/api/collections/'+id));assert.equal(invite.baseline.scores[0],50);assert.equal(invite.baseline.areas[0],1/33);
- let summary=await json(await call(db,'/api/collections/'+id+'/summary',{user:'owner'}));assert.equal(summary.aggregate.scores[0],50);
+ let invite=await json(await call(db,'/api/collections/'+id));assert.equal(invite.baseline.scores[0],600);assert.equal(invite.baseline.areas[0],600/TOTAL_WEIGHT);assert.ok(invite.baseline.qualities.flat().every(v=>v===50));
+ let summary=await json(await call(db,'/api/collections/'+id+'/summary',{user:'owner'}));assert.equal(summary.aggregate.scores[0],600);
+});
+// Old 353-quality data whose every score is the quality's position, so the test can see where each value landed.
+const previousMap=()=>({scores:Array(33).fill(50),areas:Array(33).fill(1/33),edited:Array(33).fill(true),qualities:PREVIOUS_TAXONOMY.map(c=>c.qualities.map((_,qi)=>qi+1)),qedited:PREVIOUS_TAXONOMY.map(c=>c.qualities.map(()=>false))});
+const previousCluster=name=>PREVIOUS_TAXONOMY.find(c=>c.qualities.some(q=>q.replace(/\*/g,'').replace(/\s+/g,' ').trim().toLowerCase()===name.toLowerCase()));
+const previousScore=name=>{for(const c of PREVIOUS_TAXONOMY){const i=c.qualities.findIndex(q=>q.replace(/\*/g,'').replace(/\s+/g,' ').trim().toLowerCase()===name.toLowerCase());if(i>=0)return i+1}return null};
+test('Invitations saved on the 353-quality list are served, reviewed and averaged on the 283 list',async()=>{
+ const db=database(),ownerId=(await json(await call(db,'/api/session',{user:'owner'}))).user.id,old=previousMap(),id=crypto.randomUUID(),catalog=getCatalog();
+ await db.prepare('INSERT INTO profi_collections (id, owner_id, owner_name, baseline_hash, baseline_json, catalog_version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id,ownerId,'','old',JSON.stringify(old),PREVIOUS_CATALOG_VERSION,Date.now()).run();
+ await db.prepare('INSERT INTO profi_reviews (id, collection_id, first_name, last_name, name_key, device_key, data_json, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(crypto.randomUUID(),id,'Имя','Фамилия','a','a',JSON.stringify(old),Date.now()).run();
+ let res=await call(db,'/api/collections/'+id),cookie=res.headers.get('Set-Cookie').split(';')[0],invite=await json(res);
+ assert.equal(invite.catalogVersion,CATALOG_VERSION);assert.deepEqual(invite.baseline.qualities.map(q=>q.length),catalog.clusters.map(c=>c.qualities.length));
+ // Each cluster keeps its old share, split between qualities by their old scores; loyalty moved from cluster 13 to 4 and the reality item was renamed.
+ const was=name=>previousScore(name==='неприятие реальности'?'непринятие реальности':name);
+ catalog.clusters.forEach((c,ci)=>{assert.ok(Math.abs(invite.baseline.scores[ci]-TOTAL_WEIGHT/33)<1e-6);const whole=c.qualities.reduce((n,q)=>n+was(q.name),0);c.qualities.forEach((q,qi)=>assert.ok(Math.abs(invite.baseline.qualities[ci][qi]/invite.baseline.scores[ci]-was(q.name)/whole)<1e-9,q.name))});
+ assert.equal((await call(db,'/api/collections/'+id+'/reviews',{method:'POST',cookie,payload:{catalogVersion:CATALOG_VERSION,firstName:'Анна',lastName:'Смирнова',data:data()}})).status,201);
+ let summary=await json(await call(db,'/api/collections/'+id+'/summary',{user:'owner'}));assert.equal(summary.count,2);assert.equal(summary.aggregate.qualities.flat().length,283);
+ assert.ok(Math.abs(summary.aggregate.qualities[0][0]-(invite.baseline.qualities[0][0]+50)/2)<1e-9);
+});
+test('Profile files and saved profiles on the 353-quality list are trimmed to the 283 list',async()=>{
+ const raw=template(),p=raw.profiles[0],weights=new Map();
+ p.voronoi.quality_count=353;p.voronoi.clusters=PREVIOUS_TAXONOMY.map(c=>({name:c.name,cluster_number:c.number,weight:50,qualities:c.qualities.map((name,qi)=>{weights.set(name,qi+1);return {name,weight:qi+1}})}));
+ const v=normalizeDataset(raw).profiles[0].voronoi,catalog=getCatalog();
+ assert.equal(v.quality_count,283);assert.deepEqual(v.clusters.map(c=>c.qualities.map(q=>q.name)),catalog.clusters.map(c=>c.qualities.map(q=>q.name)));
+ assert.equal(v.clusters[3].qualities.find(q=>q.name==='лояльность').weight,weights.get('лояльность'));
+ const db=database(),ownerId=(await json(await call(db,'/api/session',{user:'boss'}))).user.id,id=crypto.randomUUID();
+ await db.prepare("UPDATE profi_accounts SET role = 'admin' WHERE login = ?").bind('boss').run();
+ await db.prepare('INSERT INTO profi_profiles (id, owner_id, candidate_id, title, profession, synthetic, profile_json, metadata_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id,ownerId,'old','Старый','',1,JSON.stringify(p),'{}',Date.now(),Date.now()).run();
+ let detail=await json(await call(db,'/api/admin/profiles/'+id,{user:'boss'}));assert.equal(detail.profile.voronoi.quality_count,283);assert.equal(detail.profile.voronoi.clusters.flatMap(c=>c.qualities).length,283);
 });

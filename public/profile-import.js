@@ -1,4 +1,8 @@
 import {TAXONOMY} from './profile-taxonomy.js';
+import {PREVIOUS_TAXONOMY} from './profile-taxonomy-353.js';
+import {QUALITY_SOURCE} from './test-catalog.js';
+const countQualities=taxonomy=>taxonomy.reduce((n,c)=>n+c.qualities.length,0);
+export const QUALITY_COUNT=countQualities(TAXONOMY),PREVIOUS_QUALITY_COUNT=countQualities(PREVIOUS_TAXONOMY);
 export const MAX_IMPORT_BYTES=5*1024*1024;
 export class ImportError extends Error{constructor(errors){super(errors[0]||'Некорректный файл');this.errors=errors;this.name='ImportError'}}
 export function normalizeDataset(raw){
@@ -21,9 +25,9 @@ export function normalizeDataset(raw){
   for(const k of ['professional_experience_years','career_satisfaction'])if(p[k]!==undefined){const max=k==='career_satisfaction'?10:100;if(typeof p[k]!=='number'||!Number.isFinite(p[k])||p[k]<0||p[k]>max)error(who+' / '+k+': ожидается число от 0 до '+max);else result[k]=p[k]}
   for(const k of ['expertise_description','typical_tasks','salient_qualities','challenges_and_compensations','mapping_note','taxonomy_source'])if(p[k]!==undefined)result[k]=text(p[k],who+' / '+k);
   const v=p.voronoi;if(!v||!Array.isArray(v.clusters)||v.clusters.length!==33){error(who+': voronoi.clusters должен содержать ровно 33 кластера');return result}
-  if(v.cluster_count!==33)error(who+': cluster_count должен быть равен 33');if(v.quality_count!==353)error(who+': quality_count должен быть равен 353');
+  if(v.cluster_count!==33)error(who+': cluster_count должен быть равен 33');if(v.quality_count!==QUALITY_COUNT&&v.quality_count!==PREVIOUS_QUALITY_COUNT)error(who+': quality_count должен быть равен '+QUALITY_COUNT);
   const numbers=new Map();v.clusters.forEach(c=>{if(!c||!Number.isInteger(c.cluster_number)||c.cluster_number<1||c.cluster_number>33){error(who+': у каждого кластера нужен cluster_number от 1 до 33');return}if(numbers.has(c.cluster_number))error(who+': повторяется cluster_number '+c.cluster_number);numbers.set(c.cluster_number,c)});
-  const clusters=TAXONOMY.map(t=>{
+  const source=v.quality_count===PREVIOUS_QUALITY_COUNT?PREVIOUS_TAXONOMY:TAXONOMY,built=source.map(t=>{
    const c=numbers.get(t.number),label=who+' / кластер '+t.number;
    if(!c){error(label+': кластер отсутствует');return {cluster_number:t.number,name:t.name,weight:0,qualities:[]}}
    if(text(c.name,label+' / name',300,true)!==t.name)error(label+': ожидается название «'+t.name+'»');
@@ -31,9 +35,13 @@ export function normalizeDataset(raw){
    const qualityMap=new Map();c.qualities.forEach(q=>{const name=text(q?.name,label+' / quality.name',300,true);if(qualityMap.has(name))error(label+': повторяется качество «'+name+'»');qualityMap.set(name,q);if(!t.qualities.includes(name))error(label+': неизвестное качество «'+name+'»')});
    return {cluster_number:t.number,name:t.name,weight:weight(c.weight,label),qualities:t.qualities.map(name=>{const q=qualityMap.get(name);if(!q)error(label+': отсутствует качество «'+name+'»');const out={name,weight:weight(q?.weight,label+' / '+name)};if(q?.definition!==undefined)out.definition=text(q.definition,label+' / definition',2000);return out})};
   });
+  const clusters=source===TAXONOMY?built:currentClusters(built);
   const total=clusters.reduce((s,c)=>s+c.weight,0);if(total<=0)error(who+': сумма весов кластеров должна быть больше нуля');if(typeof v.total_cluster_weight!=='number'||Math.abs(v.total_cluster_weight-total)>1e-6)error(who+': total_cluster_weight не совпадает с суммой весов кластеров ('+total+')');
-  result.voronoi={total_cluster_weight:total,cluster_count:33,quality_count:353,clusters};return result;
+  result.voronoi={total_cluster_weight:total,cluster_count:33,quality_count:QUALITY_COUNT,clusters};return result;
  });
  if(errors.length)throw new ImportError(errors);return {metadata,profiles};
 }
+// Files and saved profiles built on the 353-quality list keep their weights; qualities dropped from the list are left out.
+const currentClusters=clusters=>TAXONOMY.map((t,ci)=>({...clusters[ci],cluster_number:t.number,name:t.name,qualities:QUALITY_SOURCE[ci].map(([a,b],qi)=>clusters[a]?.qualities?.[b]&&{...clusters[a].qualities[b],name:t.qualities[qi]}).filter(Boolean)}));
+export const upgradeProfile=p=>p?.voronoi?.quality_count===PREVIOUS_QUALITY_COUNT?{...p,voronoi:{...p.voronoi,quality_count:QUALITY_COUNT,clusters:currentClusters(p.voronoi.clusters)}}:p;
 export const profileTitle=p=>p.name||p.profession.name||p.candidate_id;
