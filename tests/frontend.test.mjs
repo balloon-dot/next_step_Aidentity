@@ -74,3 +74,7 @@ test('Plus/minus steps announce the chain once, after a pause',()=>{
  assert.equal(r,'','nothing is announced while the person is still pressing');let chain=timers.filter(t=>t.ms===2000);assert.equal(chain.length,3);chain.at(-1).f();
  assert.match(vm.runInContext(`document.querySelector('#toast').textContent`,ctx),/^По цепочке: .+ 50 → 47 \(−3\)$/);
 });
+test('Comparison pyramid keeps the self-assessment order (largest at the bottom) and fills friends into the same rows',()=>{let ctx=frontend();let r=vm.runInContext(`(()=>{let own=fresh();setClusterScore(own,5,300);setClusterScore(own,9,200);setClusterScore(own,2,5);let other=fresh();setClusterScore(other,2,400);let html=pyramidMarkup(own,other,3);remote.summary={count:1,aggregate:null,reviewers:[]};state.fixed=own;page='external';compareOpen=true;draw=()=>{};externalPage();return {html,names:getCatalog().clusters.map(c=>c.name),max:niceMax(400),open:compareOpen,page:document.querySelector('#app').innerHTML}})()`,ctx);
+ let rows=[...r.html.matchAll(/class="pyr-row" tabindex="0" data-i="(\d+)"/g)].map(m=>+m[1]),table=[...r.html.matchAll(/<tr><td>([^<]+)<\/td>/g)].map(m=>m[1]);
+ assert.equal(rows.length,33);assert.equal(rows.at(-1),5);assert.equal(rows.at(-2),9);assert.equal(rows[0],2);assert.equal(table[0],r.names[5]);assert.ok(r.html.indexOf('Я · самооценка')<r.html.indexOf('Знакомые · среднее 3'));assert.equal(r.max,500);assert.equal(r.open,false);assert.ok(r.page.includes('disabled'));
+});

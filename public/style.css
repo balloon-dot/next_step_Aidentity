@@ -20,3 +20,28 @@ svg .cell-score{font-size:14px;font-weight:800;fill:#315b40}svg .cell-enter{poin
 .weight-tools input[type=number]{width:110px;border:0;background:transparent;text-align:center;font-family:inherit;font-size:28px;font-weight:600;line-height:1.1;color:var(--ink);padding:0;-moz-appearance:textfield}.weight-tools input[type=number]::-webkit-inner-spin-button,.weight-tools input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.weight-tools input[type=number]:focus{outline:2px solid #cfdcc6;outline-offset:3px;border-radius:6px}
 .weight-tools input[type=range]{width:100%;margin:14px 0 0;accent-color:var(--green);height:22px;cursor:pointer}.weight-tools .scale{margin-top:4px}
 #toast{white-space:pre-line;max-width:calc(100vw - 32px);transform:translateX(-50%);text-align:center}svg path.chain-marked{stroke:#d93a2f;stroke-dasharray:5 3}svg .chain-note{font-size:9px;font-weight:800;fill:#c8372d}svg .chain-dot{fill:#d93a2f}.dot.chain{background:#d93a2f}.chain-badge{display:none;font-size:9px;font-weight:700;color:#c8372d;line-height:1.5}.chain-flag .chain-badge{display:block}.chain-hint{font-size:10px;line-height:1.5;color:#6d4a24;background:#fbf1e6;border-radius:6px;padding:8px 10px;margin:-8px 0 16px}
+/* Comparison view: two maps and a cluster pyramid. Self #2b8a63 / friends #d5692f validated as a pair (dataviz validator, light surface). */
+:root{--self:#2b8a63;--friends:#d5692f}
+.compare-bar{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;margin:0 0 6px}.compare-bar span{font-size:11px;color:#859087}
+.compare-maps{margin-top:18px}.swatch{display:inline-block;width:10px;height:10px;border-radius:3px;margin:0 7px 0 0;vertical-align:-1px}.swatch.self{background:var(--self)}.swatch.friends{background:var(--friends)}
+.pyramid-panel{margin-top:22px}.pyr-head p{font-size:12px;margin:0 0 18px;max-width:720px}
+.pyramid{position:relative;font-size:11px}
+.pyr-row{display:grid;grid-template-columns:1fr minmax(150px,200px) 1fr;align-items:stretch;border-radius:6px;outline-offset:1px}
+.pyr-row[data-i]{cursor:default}.pyr-row[data-i]:hover,.pyr-row.active{background:#f3f6f1}
+.pyr-side{position:relative;display:flex;align-items:center;min-height:20px;padding:2px 0;background-size:1px 100%;background-repeat:no-repeat}
+.pyr-side.self{justify-content:flex-end}
+.pyr-side i{display:block;height:14px;min-width:2px}
+.pyr-side.self i{background:var(--self);border-radius:4px 0 0 4px}.pyr-side.friends i{background:var(--friends);border-radius:0 4px 4px 0}
+.pyr-name{display:flex;align-items:center;justify-content:center;text-align:center;padding:0 10px;color:var(--ink);line-height:1.25;font-size:10.5px}
+.pyr-legend .pyr-side{font-size:10px;font-weight:700;color:var(--ink);padding-bottom:8px}.pyr-legend .pyr-side.friends .swatch{margin:0 0 0 7px}
+.pyr-axis .pyr-name{font-size:9px;color:#96a098}.pyr-ticks{min-height:22px;border-top:1px solid #dfe5dc}.pyr-ticks span{position:absolute;top:5px;font-size:9px;color:#96a098;white-space:nowrap}
+.pyr-ticks.self span{transform:translateX(50%)}.pyr-ticks.friends span{transform:translateX(-50%)}.pyr-ticks.self span:first-child{transform:none}.pyr-ticks.friends span:first-child{transform:none}
+.pyr-tip{position:absolute;z-index:5;pointer-events:none;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(32,46,42,.12);padding:9px 11px;font-size:11px;line-height:1.6;color:var(--ink);min-width:180px}.pyr-tip b{display:block;margin-bottom:3px}.pyr-tip .pyr-diff{color:#5f6b64}
+.pyr-table{margin-top:18px;font-size:11px}.pyr-table summary{cursor:pointer;color:var(--green);font-weight:600}.pyr-table table{width:100%;border-collapse:collapse;margin-top:10px}.pyr-table th,.pyr-table td{text-align:right;padding:6px 8px;border-bottom:1px solid #edf0e9;font-variant-numeric:tabular-nums}.pyr-table th:first-child,.pyr-table td:first-child{text-align:left}.pyr-table th{font-size:9px;letter-spacing:.6px;color:#96a098;font-weight:700}
+@media(max-width:600px){
+.pyr-row{grid-template-columns:1fr 1fr;grid-template-areas:"name name" "self friends";padding:3px 0}
+.pyr-row .pyr-side.self{grid-area:self}.pyr-row .pyr-side.friends{grid-area:friends}.pyr-row .pyr-name{grid-area:name;padding:2px 6px 1px;font-size:10px}
+.pyr-legend .pyr-name,.pyr-axis .pyr-name{display:none}.pyr-legend,.pyr-axis{grid-template-areas:"self friends"}
+.pyr-side i{height:10px}.pyr-side{min-height:14px}
+.pyr-legend .pyr-side.self{padding-right:8px}.pyr-legend .pyr-side.friends{padding-left:8px}.pyr-ticks.friends span:first-child{display:none}.pyr-ticks.self span:first-child{transform:translateX(50%)}
+}
