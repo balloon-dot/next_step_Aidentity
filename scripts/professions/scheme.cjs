@@ -1,0 +1,41 @@
+// Draft scheme: O*NET indicators -> our 33 clusters.
+// Source prefixes: WS = Work Styles (importance), AB = Abilities (importance), SK = Skills (importance),
+// IN = Career Interest Types (RIASEC), SIA = Specific Interest Areas. A negative weight means "the more of it, the less of the cluster".
+// kind: 'pos' = desirable cluster, 'neg' = shadow cluster (lower base weight), confidence: how well O*NET covers it.
+module.exports=[
+ {c:1,kind:'pos',confidence:'высокая',src:{'AB:Deductive Reasoning':1,'AB:Inductive Reasoning':1,'SK:Critical Thinking':1,'SK:Complex Problem Solving':1,'SK:Systems Analysis':.5,'WS:Intellectual Curiosity':.5}},
+ {c:2,kind:'pos',confidence:'высокая',src:{'WS:Innovation':1,'AB:Originality':1,'AB:Fluency of Ideas':1,'WS:Intellectual Curiosity':.5,'IN:Artistic':.5}},
+ {c:3,kind:'pos',confidence:'высокая',src:{'WS:Attention to Detail':1,'SK:Time Management':1,'AB:Information Ordering':.5,'IN:Conventional':.5}},
+ {c:4,kind:'pos',confidence:'высокая',src:{'WS:Dependability':1,'WS:Integrity':.5,'WS:Attention to Detail':.5}},
+ {c:5,kind:'pos',confidence:'высокая',src:{'WS:Achievement Orientation':1,'WS:Perseverance':1}},
+ {c:6,kind:'pos',confidence:'высокая',src:{'WS:Leadership Orientation':1,'WS:Initiative':.5,'SK:Persuasion':1,'SK:Management of Personnel Resources':1,'IN:Enterprising':.5}},
+ {c:7,kind:'pos',confidence:'высокая',src:{'WS:Social Orientation':1,'WS:Cooperation':1,'SK:Active Listening':.5,'SK:Social Perceptiveness':1,'SK:Negotiation':.5,'AB:Oral Expression':.5}},
+ {c:8,kind:'pos',confidence:'высокая',src:{'WS:Empathy':1,'SK:Service Orientation':1,'IN:Social':.5}},
+ {c:9,kind:'pos',confidence:'высокая',src:{'WS:Stress Tolerance':1,'WS:Self-Control':1}},
+ {c:10,kind:'pos',confidence:'средняя',src:{'WS:Initiative':.5,'WS:Perseverance':.5,'WS:Tolerance for Ambiguity':.5,'AB:Stamina':.5,'AB:Time Sharing':.5}},
+ {c:11,kind:'pos',confidence:'высокая',src:{'WS:Adaptability':1,'SK:Active Learning':1,'WS:Tolerance for Ambiguity':.5}},
+ {c:12,kind:'pos',confidence:'низкая',src:{'WS:Humility':1,'WS:Cooperation':.5,'WS:Empathy':.5,'SIA:Religious Activities':.5}},
+ {c:13,kind:'pos',confidence:'высокая',src:{'WS:Integrity':1,'WS:Sincerity':1,'WS:Humility':.5}},
+ {c:14,kind:'pos',confidence:'средняя',src:{'IN:Social':1,'SIA:Social Service':.5,'WS:Empathy':.5,'SK:Service Orientation':.5}},
+ {c:15,kind:'pos',confidence:'высокая',src:{'WS:Cautiousness':1,'SK:Judgment and Decision Making':1,'IN:Conventional':.5}},
+ {c:16,kind:'pos',confidence:'высокая',src:{'WS:Self-Confidence':1,'WS:Optimism':.5,'WS:Initiative':.5}},
+ {c:17,kind:'pos',confidence:'низкая',src:{'IN:Artistic':.5,'WS:Empathy':.5,'SIA:Creative Writing':.5,'SIA:Performing Arts':.5}},
+ {c:18,kind:'neg',confidence:'средняя',src:{'WS:Empathy':-1,'WS:Social Orientation':-1}},
+ {c:19,kind:'neg',confidence:'средняя',src:{'WS:Adaptability':-1,'WS:Innovation':-1,'WS:Cautiousness':.5}},
+ {c:20,kind:'neg',confidence:'средняя',src:{'WS:Social Orientation':-1,'WS:Optimism':-1}},
+ {c:21,kind:'neg',confidence:'средняя',src:{'WS:Initiative':-1,'WS:Achievement Orientation':-1}},
+ {c:22,kind:'neg',confidence:'средняя',src:{'WS:Self-Confidence':-1,'WS:Stress Tolerance':-1}},
+ {c:23,kind:'neg',confidence:'средняя',src:{'WS:Self-Control':-1,'WS:Cooperation':-1}},
+ {c:24,kind:'neg',confidence:'средняя',src:{'WS:Integrity':-1,'WS:Sincerity':-1}},
+ {c:25,kind:'neg',confidence:'средняя',src:{'WS:Humility':-1,'WS:Cooperation':-.5}},
+ {c:26,kind:'neg',confidence:'низкая',src:{'WS:Sincerity':-1,'WS:Humility':-.5}},
+ {c:27,kind:'pos',confidence:'средняя',src:{'SIA:Performing Arts':1,'SIA:Public Speaking':1,'WS:Social Orientation':.5,'SK:Persuasion':.5}},
+ {c:28,kind:'neg',confidence:'высокая',src:{'WS:Dependability':-1,'WS:Attention to Detail':-1}},
+ {c:29,kind:'neg',confidence:'средняя',src:{'WS:Intellectual Curiosity':-1,'SK:Active Learning':-1,'WS:Dependability':-.5}},
+ {c:30,kind:'neg',confidence:'средняя',src:{'WS:Optimism':-1,'WS:Stress Tolerance':-.5}},
+ {c:31,kind:'neg',confidence:'высокая',src:{'WS:Self-Control':-1,'WS:Cautiousness':-1}},
+ {c:32,kind:'neg',confidence:'низкая',src:{'WS:Attention to Detail':.5,'SK:Monitoring':.5,'WS:Leadership Orientation':.5,'SK:Quality Control Analysis':.5}},
+ {c:33,kind:'pos',confidence:'высокая',src:{'IN:Artistic':1,'SIA:Applied Arts and Design':1,'SIA:Visual Arts':.5,'AB:Visual Color Discrimination':.5}},
+];
+// Parameters of the weight formula (see build-profiles.cjs).
+module.exports.params={k:0.5,zCap:2.5,trust:{'высокая':1,'средняя':0.75,'низкая':0.5},base:{pos:1,neg:0.5},total:1650,min:1,max:1618};

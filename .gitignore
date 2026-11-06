@@ -11,3 +11,4 @@ publish.mjs
 SOURCE_HISTORY.bundle
 
 .claude/settings.local.json
+.onet/

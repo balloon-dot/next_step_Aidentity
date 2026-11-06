@@ -125,3 +125,17 @@ test('Profile files and saved profiles on the 353-quality list are trimmed to th
  await db.prepare('INSERT INTO profi_profiles (id, owner_id, candidate_id, title, profession, synthetic, profile_json, metadata_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id,ownerId,'old','Старый','',1,JSON.stringify(p),'{}',Date.now(),Date.now()).run();
  let detail=await json(await call(db,'/api/admin/profiles/'+id,{user:'boss'}));assert.equal(detail.profile.voronoi.quality_count,283);assert.equal(detail.profile.voronoi.clusters.flatMap(c=>c.qualities).length,283);
 });
+test('Profession references: only admin-imported profession profiles are served, as cluster weights',async()=>{
+ const db=database(),file=JSON.parse(readFileSync(new URL('../data/professions/admin-import-2.json',import.meta.url),'utf8'));
+ await call(db,'/api/session',{user:'boss'});await db.prepare("UPDATE profi_accounts SET role = 'admin' WHERE login = ?").bind('boss').run();
+ await json(await call(db,'/api/admin/import',{method:'POST',user:'boss',payload:{dataset:file}}));
+ // A non-reference profile in the same cabinet is not a profession.
+ const other=template();other.profiles[0].candidate_id='CAND-1';await json(await call(db,'/api/admin/import',{method:'POST',user:'boss',payload:{dataset:other}}));
+ let res=await call(db,'/api/professions');assert.match(res.headers.get('Cache-Control'),/public/);let {professions}=await json(res);
+ assert.equal(professions.length,file.profiles.length);assert.ok(!professions.some(p=>p.id==='CAND-1'));
+ const teacher=professions.find(p=>p.name==='Учитель средней и старшей школы'),source=file.profiles.find(p=>p.profession.name===teacher.name);
+ assert.deepEqual(teacher.weights,source.voronoi.clusters.map(c=>c.weight));assert.equal(teacher.subjects.length,9);assert.ok(teacher.specialties.length>5);assert.equal(teacher.synthetic,true);
+ assert.ok(professions.find(p=>p.name==='Режиссер театра').group.startsWith('GROUP-'));
+ // Profiles imported by a regular user are never served.
+ assert.equal((await call(db,'/api/admin/import',{method:'POST',user:'regular',payload:{dataset:file}})).status,403);
+});
