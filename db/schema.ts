@@ -17,3 +17,7 @@ export const sessions=sqliteTable('profi_sessions',{
 export const authLimits=sqliteTable('profi_auth_limits',{
  key:text('key').primaryKey(),attempts:integer('attempts').notNull(),windowStart:integer('window_start').notNull()
 });
+// Votes on recommended professions («Похоже на правду?»): one per person, profession and list (self / friends).
+export const professionFeedback=sqliteTable('profi_profession_feedback',{
+ id:text('id').primaryKey(),professionId:text('profession_id').notNull(),source:text('source').notNull(),voterKey:text('voter_key').notNull(),vote:integer('vote').notNull(),percent:integer('percent').notNull(),listRank:integer('list_rank').notNull(),rated:integer('rated').notNull(),collectionId:text('collection_id'),createdAt:integer('created_at').notNull(),updatedAt:integer('updated_at').notNull()
+},table=>[uniqueIndex('profi_feedback_vote').on(table.voterKey,table.professionId,table.source)]);

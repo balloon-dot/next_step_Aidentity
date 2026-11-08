@@ -139,3 +139,30 @@ test('Profession references: only admin-imported profession profiles are served,
  // Profiles imported by a regular user are never served.
  assert.equal((await call(db,'/api/admin/import',{method:'POST',user:'regular',payload:{dataset:file}})).status,403);
 });
+test('Profession votes: one per person and list, validated, private, summarized for the admin only',async()=>{
+ const db=database(),file=JSON.parse(readFileSync(new URL('../data/professions/admin-import-2.json',import.meta.url),'utf8'));
+ await call(db,'/api/session',{user:'boss'});await db.prepare("UPDATE profi_accounts SET role = 'admin' WHERE login = ?").bind('boss').run();
+ await json(await call(db,'/api/admin/import',{method:'POST',user:'boss',payload:{dataset:file}}));
+ const {professions}=await json(await call(db,'/api/professions')),plain=professions.find(p=>!p.group),grouped=professions.find(p=>p.group);
+ const vote=(user,professionId,vote,extra={})=>call(db,'/api/professions/feedback',{method:'POST',user,payload:{professionId,source:'self',vote,percent:60,rank:2,rated:12,...extra}});
+ const mine=async user=>(await json(await call(db,'/api/professions/feedback',{user}))).votes;
+ await json(await vote('ann',plain.id,1));assert.deepEqual(await mine('ann'),[{professionId:plain.id,source:'self',vote:1}]);assert.deepEqual(await mine('bob'),[]);
+ // A repeat replaces the vote, the friends' list is separate, vote 0 removes.
+ await json(await vote('ann',plain.id,-1,{percent:40}));await json(await vote('ann',plain.id,1,{source:'friends',percent:80}));
+ assert.equal((await mine('ann')).length,2);assert.equal((await mine('ann')).find(v=>v.source==='self').vote,-1);
+ await json(await vote('bob',grouped.id,1));await json(await vote('bob',plain.id,1));await json(await vote('bob',grouped.id,0));assert.equal((await mine('bob')).length,1);
+ // Bad input and unknown professions are refused.
+ for(const extra of [{source:'other'},{percent:101},{rank:0},{rated:34},{percent:1.5}])assert.equal((await vote('ann',plain.id,1,extra)).status,400);
+ assert.equal((await vote('ann',plain.id,2)).status,400);assert.equal((await vote('ann','PROF-999',1)).status,404);
+ // A foreign collection is not linked to the vote.
+ const owned=await json(await call(db,'/api/collections',{method:'POST',user:'ann',payload:{catalogVersion:CATALOG_VERSION,data:moved(5)}}));
+ await json(await vote('bob',plain.id,1,{collectionId:owned.id}));assert.equal((await db.prepare('SELECT collection_id FROM profi_profession_feedback WHERE profession_id = ? AND percent = 60').bind(plain.id).first()).collection_id,null);
+ // Anonymous voters get a device cookie and keep their vote through it.
+ const anon=await call(db,'/api/professions/feedback',{method:'POST',payload:{professionId:plain.id,source:'self',vote:-1,percent:30,rank:9,rated:5}});assert.equal(anon.status,200);const cookie=anon.headers.get('Set-Cookie').split(';')[0];
+ assert.equal((await json(await call(db,'/api/professions/feedback',{cookie}))).votes.length,1);assert.deepEqual((await json(await call(db,'/api/professions/feedback'))).votes,[]);
+ // Summary: self 👎 40 + 👎 30, self 👍 60, friends 👍 80.
+ assert.equal((await call(db,'/api/admin/profession-feedback',{user:'ann'})).status,403);
+ const stats=await json(await call(db,'/api/admin/profession-feedback',{user:'boss'}));
+ assert.equal(stats.votes,4);assert.equal(stats.voters,3);assert.equal(stats.up,2);assert.equal(stats.down,2);assert.equal(stats.upPercent,70);assert.equal(stats.downPercent,35);
+ const row=stats.professions.find(p=>p.id===plain.id);assert.equal(row.name,plain.name);assert.deepEqual(row.self,{up:1,down:2});assert.deepEqual(row.friends,{up:1,down:0});
+});
