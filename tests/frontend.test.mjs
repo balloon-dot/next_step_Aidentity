@@ -118,3 +118,8 @@ test('In the tail selecting a row opens the sheet, another row\'s +/− does not
  let rebuilt=0,real=clusterPanel;clusterPanel=()=>{rebuilt++};selected=2;updateTailValues(false);let quiet=rebuilt;slideWeight(1000);let sliding=rebuilt;updateTailValues();let normal=rebuilt;clusterPanel=real;return {selected3,sameRow,otherRow,again,none,quiet,sliding,normal}})()`,ctx);
  assert.equal(r.selected3,true);assert.equal(r.sameRow,true,'+/− in the open row keeps the sheet');assert.equal(r.otherRow,false,'+/− in another row closes it');assert.equal(r.again,true);assert.equal(r.none,false);assert.equal(r.quiet,0);assert.equal(r.sliding,0,'the slider is not replaced under the finger');assert.equal(r.normal,1);
 });
+test('The weight slider carries its fill for the touch styling, and touch sliders take only the thumb',()=>{let ctx=frontend();let r=vm.runInContext(`(()=>{selected=0;clusterPanel();return document.querySelector('#cluster').innerHTML})()`,ctx);
+ assert.match(r,/id="cluster-weight-range"[^>]*style="--fill:[0-9.]+"/);
+ const css=readFileSync(new URL('../public/style.css',import.meta.url),'utf8'),block=css.slice(css.indexOf('@media(pointer:coarse){#cluster')>=0?css.indexOf('@media(pointer:coarse){#cluster'):css.lastIndexOf('@media(pointer:coarse){'));
+ assert.ok(block.includes('pointer-events:none'));assert.ok(block.includes('::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto'));assert.ok(block.includes('::-moz-range-thumb{pointer-events:auto'));
+});

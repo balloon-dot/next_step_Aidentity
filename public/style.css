@@ -73,3 +73,13 @@ body.sheet-open main{padding-bottom:65vh}
 #cluster.sheet .links{margin-top:12px;border-top:1px solid var(--line);padding-top:4px}#cluster.sheet .links-hint{display:none}#cluster.sheet .links-title{line-height:44px}
 #cluster.sheet .links.measuring .links-body{display:none}
 }
+/* Touch screens: a panel slider moves only when its thumb is grabbed. The input ignores touches, the thumb alone takes them, so a
+   stray tap on the track does nothing and a swipe from it scrolls the sheet. The thumb is a 44 px target around the same dot. */
+@media(pointer:coarse){
+#cluster input[type=range]{-webkit-appearance:none;appearance:none;height:44px;margin:0;pointer-events:none;background:linear-gradient(var(--green),var(--green)) 11px center/calc((100% - 44px)*var(--fill,0) + 11px) 6px no-repeat,linear-gradient(#e4e8e3,#e4e8e3) center/calc(100% - 22px) 6px no-repeat}
+#cluster .links input[type=range]{background:linear-gradient(#aebaa8,#aebaa8) center/2px 14px no-repeat,linear-gradient(#e4e8e3,#e4e8e3) center/calc(100% - 22px) 6px no-repeat}
+#cluster input[type=range]::-webkit-slider-runnable-track{height:44px;background:transparent}
+#cluster input[type=range]::-moz-range-track{height:44px;background:transparent}
+#cluster input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;width:44px;height:44px;margin-top:0;border:0;border-radius:0;box-shadow:none;background:radial-gradient(circle,var(--green) 0 9px,#fff 9.5px 11px,var(--green) 11.5px 12.5px,transparent 13px)}
+#cluster input[type=range]::-moz-range-thumb{pointer-events:auto;width:44px;height:44px;border:0;border-radius:0;box-shadow:none;background:radial-gradient(circle,var(--green) 0 9px,#fff 9.5px 11px,var(--green) 11.5px 12.5px,transparent 13px)}
+}
