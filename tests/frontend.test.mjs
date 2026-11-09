@@ -103,3 +103,6 @@ test('Profession card votes on the first member of a group, toggles off on repea
  openProfession('self',0);let card=document.querySelector('#modal').innerHTML;await voteProfession(1);let after=prof.votes.get('PROF-001:self');await voteProfession(1);let cleared=prof.votes.has('PROF-001:self');fail=true;await voteProfession(-1);return {card,posted,after,cleared,restored:prof.votes.has('PROF-001:self')}})()`,ctx);
  assert.ok(r.card.includes('Похоже на правду?'));assert.equal(r.posted[0].professionId,'PROF-001');assert.equal(r.posted[0].vote,1);assert.equal(r.posted[0].rank,1);assert.equal(r.posted[0].source,'self');assert.equal(r.after,1);assert.equal(r.posted[1].vote,0);assert.equal(r.cleared,false);assert.equal(r.restored,false);
 });
+test('An interrupted drag on the map saves and stops without errors',()=>{let ctx=frontend();let r=vm.runInContext(`(()=>{let saved=0;save=()=>{saved++};drag={moved:true,frame:null,element:null,pointerId:1};stopPointerDrag();return {saved,drag}})()`,ctx);
+ assert.equal(r.saved,1);assert.equal(r.drag,null);
+});

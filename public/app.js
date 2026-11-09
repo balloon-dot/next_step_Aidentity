@@ -96,7 +96,7 @@ function invitationWelcome(){
 function reviewerTouched(i){return reviewChanges.clusters[i]||reviewChanges.qualities[i].some(Boolean)}
 function reviewerName(){return invitation.ownerName||'Владелец профиля'}
 function reviewContext(){return rating?`<div class="review-context" role="note"><div><span>ВЫ ОЦЕНИВАЕТЕ ЭТОГО ЧЕЛОВЕКА</span><strong>${esc(reviewerName())}</strong></div><div class="reviewer-caption">Оценщик: ${esc(invitation.firstName)} ${esc(invitation.lastName)}<small>Это взгляд на другого человека</small></div></div>`:''}
-function stopPointerDrag(){let active=drag;drag=null;if(!active)return;if(active.frame!==null)cancelAnimationFrame(active.frame);try{if(active.element?.hasPointerCapture?.(active.pointerId))active.element.releasePointerCapture(active.pointerId)}catch{}if(active.moved){if(rating)persistGuest();else save();announceChains()}}
+function stopPointerDrag(){let active=drag;drag=null;if(!active)return;if(active.frame!==null)cancelAnimationFrame(active.frame);try{if(active.element?.hasPointerCapture?.(active.pointerId))active.element.releasePointerCapture(active.pointerId)}catch{}if(active.moved){if(rating)persistGuest();else save()}}
 function clearClusterSelection(){stopPointerDrag();selected=null;mapPage()}
 function updateSelectionControls(){let button=$('#clear-selection'),status=$('#selection-status'),l=level(current()),noun=l.at===null?['Выбран один кластер','Кластер не выбран']:['Выбрано качество','Качество не выбрано'];if(button)button.disabled=!Number.isInteger(selected);if(status)status.textContent=Number.isInteger(selected)?noun[0]+': '+l.names[selected]:noun[1]}
 function sortedTailIndices(values){return values.map((v,i)=>({v,i})).sort((a,b)=>b.v-a.v||a.i-b.i).map(x=>x.i)}
