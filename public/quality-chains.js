@@ -2,7 +2,8 @@ import {MIN_WEIGHT,qualityBudget,distribute} from './test-catalog.js?v=13';
 // Links between qualities. Nothing moves on its own: editing a quality changes only that quality (and the shares of its
 // cluster). The links bar under an opened quality lets the person move everything linked to it, in one gesture.
 // Right side: the quality and its adjacent qualities. Left side: the opposites of those. A pull multiplies one side by the
-// factor and divides the other by it; the bar then returns to the middle, so it is an action and leaves no state behind.
+// factor and divides the other by it. The handle stays where it was left and always counts from the reference values:
+// what the person had set by hand, or the neutral start if they never touched them. The middle returns to the reference.
 // To change the links, edit the two lists below: opposites are pairs, adjacent qualities are groups of mutual neighbours.
 export const LINK_RANGE=5;
 // Opposite qualities (the user's list «Цепочки противоположных качеств», 71 pairs).
@@ -187,6 +188,34 @@ export function applyLinks(d,base,group,factor){
   ids.forEach((q,n)=>d.qualities[c][q]=placed[n]);free.forEach((k,n)=>d.qualities[c][k]=others[n]);
  }
 }
+// Bars live next to the map, never in its data: links.bars["cluster:quality"] = {p: position −100..100, base: reference values
+// of the touched clusters, after: their values as the bar left them, marked/reviewed: flags the bar itself switched on}.
+export const freshLinks=()=>({bars:{}});
+const numbers=v=>Array.isArray(v)&&v.length>0&&v.every(x=>Number.isFinite(x)&&x>0);
+const clusterMap=v=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length>0&&Object.entries(v).every(([k,a])=>/^\d+$/.test(k)&&numbers(a));
+const keys=v=>Array.isArray(v)?v.filter(x=>typeof x==='string'&&/^\d+:\d+$/.test(x)):[];
+// Bar state comes from browser storage, so only well-formed entries survive.
+export function readLinks(raw){
+ const out=freshLinks();if(!raw||typeof raw.bars!=='object'||raw.bars===null||Array.isArray(raw.bars))return out;
+ for(const [k,b] of Object.entries(raw.bars))if(/^\d+:\d+$/.test(k)&&b&&Number.isFinite(b.p)&&Math.abs(b.p)<=100&&clusterMap(b.base)&&clusterMap(b.after))out.bars[k]={p:b.p,base:b.base,after:b.after,marked:keys(b.marked),reviewed:keys(b.reviewed)};
+ return out;
+}
+const barClusters=g=>[...new Set([...g.near,...g.far].map(x=>x[0]))];
+const snapshot=(d,list)=>Object.fromEntries(list.map(c=>[c,d.qualities[c].slice()]));
+// The bar of an opened quality, if it has been moved. A value changed elsewhere since (by hand or by another bar) carries over
+// into the reference, so moving this bar never undoes that change.
+export function settledBar(links,d,key,group){
+ const bar=links.bars[key];if(!bar)return null;
+ const list=barClusters(group);
+ if(!list.every(c=>bar.base[c]?.length===d.qualities[c].length&&bar.after[c]?.length===d.qualities[c].length)){delete links.bars[key];return null}
+ for(const c of list)d.qualities[c].forEach((v,k)=>{if(Math.abs(v-bar.after[c][k])>1e-9){bar.base[c][k]*=v/bar.after[c][k];bar.after[c][k]=v}});
+ return bar;
+}
+export function openBar(links,d,key,group){
+ const found=settledBar(links,d,key,group);if(found)return found;
+ const list=barClusters(group);return links.bars[key]={p:0,base:snapshot(d,list),after:snapshot(d,list),marked:[],reviewed:[]};
+}
+export function moveBar(d,bar,group,p){applyLinks(d,bar.base,group,LINK_RANGE**(p/100));bar.p=p;bar.after=snapshot(d,barClusters(group))}
 // Sets quality j of cluster i to v; the other qualities of the cluster share the rest of its budget.
 export function placeQuality(d,i,j,v){
  const q=d.qualities[i],budget=qualityBudget(d,i),free=q.map((_,k)=>k).filter(k=>k!==j);

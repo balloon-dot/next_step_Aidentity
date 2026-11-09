@@ -1,6 +1,6 @@
 'use strict';
 import {CURRENT_CATALOG_VERSION,LEGACY_CATALOG_VERSION,getCatalog,dataCatalogVersion,validScoreData,freshScoreData,upgradeData,currentVersionOf,TOTAL_WEIGHT,INITIAL_WEIGHT,MIN_WEIGHT,budgetOf,qualityBudget,clusterBounds,qualityBounds,distribute} from './test-catalog.js?v=13';
-import {LINK_RANGE,linkGroup,applyLinks,placeQuality} from './quality-chains.js?v=2';
+import {LINK_RANGE,linkGroup,placeQuality,freshLinks,readLinks,settledBar,openBar,moveBar} from './quality-chains.js?v=3';
 import {MIN_RATED_CLUSTERS,prepareReferences,basisOf,accentOf,matchProfession,matchAll,groupMatches,explainMatch} from './profession-match.js?v=1';
 let CATALOG_VERSION=CURRENT_CATALOG_VERSION,names=getCatalog().clusters.map(c=>c.name);
 function useCatalog(version){const c=getCatalog(version);if(!c)throw Error('Перечень качеств не поддерживается. Обновите страницу.');CATALOG_VERSION=version;names=c.clusters.map(c=>c.name)}
@@ -13,9 +13,9 @@ function prepareState(raw){
  for(const k of ['self','fixed'])next[k]=upgradeData(next[k]);next.external.forEach(x=>{if(x?.data)x.data=upgradeData(x.data)});if(next.previousTest)for(const k of ['self','fixed'])next.previousTest[k]=upgradeData(next.previousTest[k]);
  if(!validScoreData(next.self,CURRENT_CATALOG_VERSION)){
   if(dataCatalogVersion(next.self)||dataCatalogVersion(next.fixed))next.previousTest={catalogVersion:dataCatalogVersion(next.self)||dataCatalogVersion(next.fixed),self:next.self,fixed:next.fixed||null,fixedAt:next.fixedAt||null,external:next.external,collectionId:next.collectionId||null};
-  next.self=freshScoreData();next.fixed=null;next.external=[];next.collectionId=null;next.pendingNew=false;
+  next.self=freshScoreData();next.fixed=null;next.external=[];next.collectionId=null;next.pendingNew=false;next.links=null;
  }else if(next.fixed&&!validScoreData(next.fixed,CURRENT_CATALOG_VERSION)){next.fixed=null;next.collectionId=null;next.pendingNew=false}
- delete next.chains;next.catalogVersion=CURRENT_CATALOG_VERSION;return next;
+ delete next.chains;next.links=readLinks(next.links);next.catalogVersion=CURRENT_CATALOG_VERSION;return next;
 }
 let state;try{state=JSON.parse(localStorage.getItem('profi.v1'))}catch{}state=prepareState(state);
 // Scores are a fixed budget: 1650 points, with each cell in [1, 1618].
@@ -39,7 +39,7 @@ const invitation={ownerName:'',baseline:null,loading:!!rating,error:'',started:f
 const freshReviewChanges=()=>({clusters:Array(33).fill(false),qualities:getCatalog(CATALOG_VERSION).clusters.map(c=>c.qualities.map(()=>false))});
 let reviewChanges=freshReviewChanges(),mapView='voronoi',tailOrder=null,tailData=null;
 let summaryBusy=false,shareBusy=false;
-let toastTimer=null,linkDrag=null;
+let toastTimer=null,guestLinks=freshLinks();
 async function api(path,options={}){const response=await fetch(path,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...options.headers}});let result;try{result=await response.json()}catch{throw Error('Сервер временно недоступен. Попробуйте еще раз.')}if(!response.ok){let e=Error(result.error||'Не удалось выполнить запрос.');e.status=response.status;throw e}return result}
 function signInLink(){return '<button class="primary" onclick="openAuth()">Войти или создать аккаунт →</button>'}
 function blankState(){return prepareState(null)}
@@ -60,10 +60,10 @@ function openAuth(mode='login'){
 async function logout(){try{await api('/api/auth/logout',{method:'POST',body:'{}'});save();state=blankState();remote.signedIn=false;remote.user=null;remote.active=null;remote.summary=null;remote.collections=[];remote.error='';page='map';render();toast('Вы вышли из аккаунта')}catch(e){toast(e.message)}}
 async function ensureCollection(){let data=state.pendingNew?state.fixed:ownData();if(!data)return;let c=await api('/api/collections',{method:'POST',body:JSON.stringify({catalogVersion:dataCatalogVersion(data),ownerName:state.profile.name?.trim()||remote.active?.ownerName||'',data})});remote.active=c;state.collectionId=c.id;state.pendingNew=false;save();await loadOwned(false);return c}
 
-function persistGuest(){if(!rating)return;try{sessionStorage.setItem('profi-draft-'+rating,JSON.stringify({catalogVersion:CATALOG_VERSION,data:guest,changes:reviewChanges,view:mapView,firstName:invitation.firstName,lastName:invitation.lastName}))}catch{}}
+function persistGuest(){if(!rating)return;try{sessionStorage.setItem('profi-draft-'+rating,JSON.stringify({catalogVersion:CATALOG_VERSION,data:guest,changes:reviewChanges,links:guestLinks,view:mapView,firstName:invitation.firstName,lastName:invitation.lastName}))}catch{}}
 function ownData(){return remote.active?.baseline||state.fixed}
-function editOwnMap(){const d=ownData();if(d&&dataCatalogVersion(d)===CURRENT_CATALOG_VERSION){state.self=structuredClone(d);save()}go('map')}
-async function initialize(){try{let session=await api('/api/session');remote.signedIn=session.signedIn;remote.user=session.user;if(remote.signedIn&&!rating&&!shared&&!shareError)activateAccount(session.user);if(rating){let info=await api('/api/collections/'+encodeURIComponent(rating));useCatalog(info.catalogVersion);guest=structuredClone(info.baseline);reviewChanges=freshReviewChanges();invitation.ownerName=info.ownerName;invitation.baseline=structuredClone(info.baseline);invitation.isOwner=info.isOwner;invitation.alreadySubmitted=info.alreadySubmitted;try{let draft=JSON.parse(sessionStorage.getItem('profi-draft-'+rating));if(draft?.data&&draft.firstName&&draft.lastName&&(draft.catalogVersion||dataCatalogVersion(draft.data))===CATALOG_VERSION&&validScoreData(draft.data,CATALOG_VERSION)){guest={...draft.data,areas:draft.data.scores.map(v=>v/TOTAL_WEIGHT)};invitation.firstName=draft.firstName;invitation.lastName=draft.lastName;if(draft.changes?.clusters?.length===33&&draft.changes?.qualities?.length===33&&draft.changes.qualities.every((q,i)=>Array.isArray(q)&&q.length===getCatalog(CATALOG_VERSION).clusters[i].qualities.length&&q.every(v=>typeof v==='boolean'))){reviewChanges=draft.changes}mapView=draft.view==='tail'?'tail':'voronoi'}}catch{}invitation.loading=false}else if(remote.signedIn&&!shared&&!shareError){await loadOwned(false)}}catch(e){if(rating){invitation.error=e.message;invitation.loading=false}else remote.error=e.message}remote.loading=false;render()}
+function editOwnMap(){const d=ownData();if(d&&dataCatalogVersion(d)===CURRENT_CATALOG_VERSION){if(JSON.stringify(d.qualities)!==JSON.stringify(state.self.qualities))state.links=freshLinks();state.self=structuredClone(d);save()}go('map')}
+async function initialize(){try{let session=await api('/api/session');remote.signedIn=session.signedIn;remote.user=session.user;if(remote.signedIn&&!rating&&!shared&&!shareError)activateAccount(session.user);if(rating){let info=await api('/api/collections/'+encodeURIComponent(rating));useCatalog(info.catalogVersion);guest=structuredClone(info.baseline);reviewChanges=freshReviewChanges();invitation.ownerName=info.ownerName;invitation.baseline=structuredClone(info.baseline);invitation.isOwner=info.isOwner;invitation.alreadySubmitted=info.alreadySubmitted;try{let draft=JSON.parse(sessionStorage.getItem('profi-draft-'+rating));if(draft?.data&&draft.firstName&&draft.lastName&&(draft.catalogVersion||dataCatalogVersion(draft.data))===CATALOG_VERSION&&validScoreData(draft.data,CATALOG_VERSION)){guest={...draft.data,areas:draft.data.scores.map(v=>v/TOTAL_WEIGHT)};invitation.firstName=draft.firstName;invitation.lastName=draft.lastName;if(draft.changes?.clusters?.length===33&&draft.changes?.qualities?.length===33&&draft.changes.qualities.every((q,i)=>Array.isArray(q)&&q.length===getCatalog(CATALOG_VERSION).clusters[i].qualities.length&&q.every(v=>typeof v==='boolean'))){reviewChanges=draft.changes}guestLinks=readLinks(draft.links);mapView=draft.view==='tail'?'tail':'voronoi'}}catch{}invitation.loading=false}else if(remote.signedIn&&!shared&&!shareError){await loadOwned(false)}}catch(e){if(rating){invitation.error=e.message;invitation.loading=false}else remote.error=e.message}remote.loading=false;render()}
 async function loadOwned(redraw=true){const data=await api('/api/owner/collections');remote.collections=data.collections.filter(c=>!!getCatalog(c.catalogVersion));if(!state.pendingNew){let active=remote.collections.find(c=>c.id===state.collectionId)||remote.collections.find(c=>c.catalogVersion===CURRENT_CATALOG_VERSION);if(active){remote.active=active;state.collectionId=active.id;if(!state.fixed&&active.catalogVersion===CURRENT_CATALOG_VERSION){state.fixed=structuredClone(active.baseline);state.fixedAt=new Date(active.createdAt).toISOString();state.self=structuredClone(active.baseline)}save();await refreshSummary(false)}}if(redraw)render()}
 // redraw: true from the button, 'auto' from the 20-second poll (repaints only when the answers changed).
 async function refreshSummary(redraw=true){if(!remote.active||summaryBusy)return;summaryBusy=true;try{const before=JSON.stringify(remote.summary);remote.summary=await api('/api/collections/'+remote.active.id+'/summary');remote.error='';if(redraw){if((page==='external'||page==='professions')&&(redraw!=='auto'||before!==JSON.stringify(remote.summary)))render();$('#badge').textContent=remote.summary.count}}catch(e){remote.error=e.message;if(redraw)toast(e.message)}finally{summaryBusy=false}}
@@ -160,33 +160,41 @@ function setClusterScore(d,i,v){
 }
 // A quality takes weight from the other qualities of its cluster; the cluster's share of the map stays the same.
 function setQualityScore(d,i,j,v){
- const [lo,hi]=qualityBounds(d,i);v=Math.max(lo,Math.min(hi,v));if(rating&&d===guest&&Math.abs(v-d.qualities[i][j])>1e-9)reviewChanges.qualities[i][j]=true;
+ const [lo,hi]=qualityBounds(d,i);v=Math.max(lo,Math.min(hi,v));
+ if(Math.abs(v-d.qualities[i][j])>1e-9){if(rating&&d===guest)reviewChanges.qualities[i][j]=true;forgetLinkFlags(d,i,j)}
  placeQuality(d,i,j,v);d.qedited[i][j]=true;
 }
 const catalogOf=d=>getCatalog(dataCatalogVersion(d))||getCatalog();
 function pick(i){selected=i}
 // The links bar of an opened quality: the quality and its adjacent ones on the right, their opposites on the left.
-// Nothing changes until it is pulled; on release the values stay and the bar returns to the middle.
+// Nothing changes until it is pulled. The handle stays where it was left and counts from the reference values.
+const linksOf=d=>rating?(d===guest?guestLinks:null):d===state.self?(state.links||=freshLinks()):null;
+// A hand edit makes the value the new reference for the quality's own bar and stays marked as the person's own edit.
+function forgetLinkFlags(d,i,j){const links=linksOf(d),key=i+':'+j;if(!links)return;delete links.bars[key];for(const b of Object.values(links.bars)){b.marked=b.marked.filter(x=>x!==key);b.reviewed=b.reviewed.filter(x=>x!==key)}}
+const linkText=p=>{if(!p)return 'без изменений';const f=LINK_RANGE**(Math.abs(p)/100);return (p>0?'вправо':'влево')+' ×'+fmt(Number(f.toFixed(1)))};
+const linkValue=(from,to)=>Math.abs(to-from)<.05?fmt(to):fmt(from)+' → '+fmt(to);
 function linksPanel(d,c,q){
  const catalog=catalogOf(d),g=linkGroup(catalog,c,q);if(!g)return '';
- const name=([a,b])=>catalog.clusters[a].qualities[b].name,more=(list,first)=>first+(list.length>1?' +'+(list.length-1):'');
- const row=([a,b])=>`<li data-link="${a}:${b}" title="Кластер: ${esc(catalog.clusters[a].name)}"><span>${esc(name([a,b]))}</span><b>${fmt(d.qualities[a][b])}</b></li>`;
- return `<div class="divider"></div><section class="links"><div class="links-title">Связи качества</div><p class="links-hint">Само ничего не меняется. Потяните бар: одна сторона усилится, другая ослабнет. Рост ограничен баллами кластера, точные значения — в строках ниже.</p><div class="links-ends"><span>${esc(g.far.length?more(g.far,name(g.far[0])):'Слабее')}</span><span>${esc(g.far.length?more(g.near,name(g.near[0])):'Сильнее')}</span></div><input id="links-range" type="range" min="-100" max="100" step="1" value="0" aria-label="Связи качества ${esc(name(g.near[0]))}" aria-valuetext="без изменений" oninput="slideLinks(this.value)" onchange="commitLinks()"><div class="links-readout" id="links-readout">без изменений</div><div class="links-sides"><ul>${g.far.map(row).join('')}</ul><ul>${g.near.map(row).join('')}</ul></div></section>`;
+ const links=linksOf(d),bar=links&&settledBar(links,d,c+':'+q,g),p=bar?.p||0,name=([a,b])=>catalog.clusters[a].qualities[b].name,more=(list,first)=>first+(list.length>1?' +'+(list.length-1):'');
+ const row=([a,b])=>`<li data-link="${a}:${b}" title="Кластер: ${esc(catalog.clusters[a].name)}"><span>${esc(name([a,b]))}</span><b>${linkValue(bar?bar.base[a][b]:d.qualities[a][b],d.qualities[a][b])}</b></li>`;
+ return `<div class="divider"></div><section class="links"><div class="links-title">Связи качества</div><p class="links-hint">Само ничего не меняется. Потяните бар: одна сторона усилится, другая ослабнет. Центр — значения, которые вы выставили сами, а если не трогали — нейтральные. Рост ограничен баллами кластера.</p><div class="links-ends"><span>${esc(g.far.length?more(g.far,name(g.far[0])):'Слабее')}</span><span>${esc(g.far.length?more(g.near,name(g.near[0])):'Сильнее')}</span></div><input id="links-range" type="range" min="-100" max="100" step="1" value="${p}" aria-label="Связи качества ${esc(name(g.near[0]))}" aria-valuetext="${linkText(p)}" oninput="slideLinks(this.value)" onchange="commitLinks()"><div class="links-readout" id="links-readout">${linkText(p)}</div><div class="links-sides"><ul>${g.far.map(row).join('')}</ul><ul>${g.near.map(row).join('')}</ul></div></section>`;
 }
 function slideLinks(position){
  if(!Number.isInteger(selected)||!Number.isInteger(inside))return;
- const d=current(),key=inside+':'+selected,group=linkGroup(catalogOf(d),inside,selected);if(!group)return;
- if(linkDrag?.key!==key||linkDrag.d!==d)linkDrag={key,d,group,base:structuredClone(d.qualities)};
- const p=Number(position),factor=LINK_RANGE**(p/100),times=fmt(Number((p<0?1/factor:factor).toFixed(1))),text=p?(p>0?'вправо':'влево')+' ×'+times:'без изменений';
- applyLinks(d,linkDrag.base,group,factor);
- document.querySelectorAll('[data-link]').forEach(el=>{const [a,b]=el.dataset.link.split(':').map(Number),from=linkDrag.base[a][b],to=d.qualities[a][b];el.querySelector('b').textContent=Math.abs(to-from)<.05?fmt(to):fmt(from)+' → '+fmt(to)});
- const readout=$('#links-readout');if(readout)readout.textContent=text;$('#links-range')?.setAttribute('aria-valuetext',text);
- const l=level(d),i=selected,input=$('#cluster-weight-input'),share=$('#cluster-share'),range=$('#cluster-weight-range');if(input)input.value=Number(l.values[i].toFixed(1));if(share)share.textContent=pct(l.values[i]/l.total);if(range)range.value=toSlider(l.values[i],l.bounds(i));
+ const d=current(),links=linksOf(d),key=inside+':'+selected,group=linkGroup(catalogOf(d),inside,selected);if(!links||!group)return;
+ let p=Number(position);if(Math.abs(p)<=3)p=0; // the middle is easy to hit
+ const bar=openBar(links,d,key,group),range=$('#links-range');moveBar(d,bar,group,p);if(p===0&&range)range.value=0;
+ document.querySelectorAll('[data-link]').forEach(el=>{const [a,b]=el.dataset.link.split(':').map(Number);el.querySelector('b').textContent=linkValue(bar.base[a][b],d.qualities[a][b])});
+ const readout=$('#links-readout');if(readout)readout.textContent=linkText(p);range?.setAttribute('aria-valuetext',linkText(p));
+ const l=level(d),i=selected,input=$('#cluster-weight-input'),share=$('#cluster-share'),own=$('#cluster-weight-range');if(input)input.value=Number(l.values[i].toFixed(1));if(share)share.textContent=pct(l.values[i]/l.total);if(own)own.value=toSlider(l.values[i],l.bounds(i));
  if(mapView==='tail')updateTailValues();else repaintDiagram?.();
 }
 function commitLinks(){
- const a=linkDrag;linkDrag=null;if(!a)return;
- for(const [c,q] of [...a.group.near,...a.group.far])if(Math.abs(a.d.qualities[c][q]-a.base[c][q])>1e-6){a.d.qedited[c][q]=true;if(rating&&a.d===guest)reviewChanges.qualities[c][q]=true}
+ if(!Number.isInteger(selected)||!Number.isInteger(inside))return;
+ const d=current(),links=linksOf(d),key=inside+':'+selected,group=linkGroup(catalogOf(d),inside,selected),bar=links?.bars[key];if(!bar||!group)return;
+ for(const [c,q] of [...group.near,...group.far])if(Math.abs(d.qualities[c][q]-bar.base[c][q])>1e-6){const k=c+':'+q;if(!d.qedited[c][q]){d.qedited[c][q]=true;bar.marked.push(k)}if(rating&&d===guest&&!reviewChanges.qualities[c][q]){reviewChanges.qualities[c][q]=true;bar.reviewed.push(k)}}
+ // Back in the middle the bar has done nothing: the flags it switched on go too.
+ if(bar.p===0){for(const k of bar.marked){const [c,q]=k.split(':').map(Number);d.qedited[c][q]=false}if(rating&&d===guest)for(const k of bar.reviewed){const [c,q]=k.split(':').map(Number);reviewChanges.qualities[c][q]=false}delete links.bars[key]}
  if(rating)persistGuest();else save();mapPage();$('#links-range')?.focus({preventScroll:true});
 }
 function draw(d,selector='#diagram',interactive=true,at=interactive?inside:null){
@@ -225,7 +233,7 @@ function details(i,d){
 function closeModal(){$('#modal').hidden=true;if(rating&&invitation.started&&!guestDone)mapPage()}
 
 function restartMap(){stopPointerDrag();$('#modal').hidden=false;$('#modal').innerHTML=`<div class="dialog"><div class="dialog-head"><h2>${rating?'Начать оценку заново?':'Пройти заново?'}</h2><button onclick="closeModal()" aria-label="Закрыть">×</button></div><p>${rating?'Ваши правки сбросятся, карта вернется к исходному результату владельца.':'Все кластеры и качества вернутся к '+INITIAL_WEIGHT+'. Зафиксированный результат и ответы знакомых сохранятся.'}</p><button class="primary wide" onclick="confirmRestart()">${rating?'Сбросить мои правки':'Начать заново'}</button></div>`}
-function confirmRestart(){if(rating){guest=structuredClone(invitation.baseline);reviewChanges=freshReviewChanges();persistGuest()}else{state.self=fresh();save()}selected=null;inside=null;tailOrder=null;$('#modal').hidden=true;mapPage();toast(rating?'Правки сброшены':'Карта начата заново')}
+function confirmRestart(){if(rating){guest=structuredClone(invitation.baseline);reviewChanges=freshReviewChanges();guestLinks=freshLinks();persistGuest()}else{state.self=fresh();state.links=freshLinks();save()}selected=null;inside=null;tailOrder=null;$('#modal').hidden=true;mapPage();toast(rating?'Правки сброшены':'Карта начата заново')}
 async function fix(){
  let d=current();if(rating){$('#modal').hidden=false;$('#modal').innerHTML=`<div class="dialog"><div class="dialog-head"><h2>Отправить вашу оценку?</h2><button onclick="closeModal()">×</button></div><p>Вы оценили: <b>${esc(reviewerName())}</b></p><p>Оценщик: <b>${esc(invitation.firstName)} ${esc(invitation.lastName)}</b></p><p>Сохраним вашу итоговую карту, включая ответы, которые вы оставили без изменений. Самооценка владельца останется прежней.</p><button class="primary wide" id="submit-review" onclick="submitReview()">Отправить результат</button></div>`;return}
  if(!d.edited.some(Boolean)&&!d.qedited.flat().some(Boolean)){toast('Сначала оцените хотя бы одно качество');return}
