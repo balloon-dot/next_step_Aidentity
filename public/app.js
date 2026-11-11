@@ -197,8 +197,8 @@ function synonymRow(d,c,q){
 // The diagram is fitted into a fixed-height box with empty bands above and below it; the chain moves up to its lower edge
 // and takes the size of the quality names on it.
 function hugDiagram(){const row=$('#synonym-row'),svg=$('#diagram');if(!row?.style)return;row.style.marginTop='';row.style.maxWidth='';const r=svg?.getBoundingClientRect?.();if(!r?.width)return;row.style.marginTop=-Math.max(0,(r.height-Math.min(r.height,r.width*620/700))/2)+'px';row.style.maxWidth=Math.min(r.width,r.height*700/620)+'px';
- // A touch larger (×1.15) than the names on the diagram's neutral cells, and scaling with them.
- row.style.setProperty?.('--chain-size',(11.5*Math.min(r.width/700,r.height/620)).toFixed(2)+'px')}
+ // A touch larger (×1.15) than the names on the diagram's cells (11.5 there), and scaling with them.
+ row.style.setProperty?.('--chain-size',(13.2*Math.min(r.width/700,r.height/620)).toFixed(2)+'px')}
 globalThis.addEventListener?.('resize',()=>hugDiagram());
 function applySynonym(c,q){
  const d=current(),key=c+':'+q,left=synonyms.change-(synonyms.applied[key]||0);if(!synonyms.cell||Math.abs(left)<.05)return;
@@ -213,8 +213,10 @@ function draw(d,selector='#diagram',interactive=true,at=interactive?inside:null)
  const fills=['#94b59a','#a2bda0','#82aa93','#b0c7a4'],neutral=['#e2e8dc','#dce5d5','#e9ecdf','#d6e1d0','#e4e9dc'];
  const fill=i=>l.touched(i)?'#e7ac67':l.edited[i]?fills[i%4]:neutral[i%5],enter=l.at===null,perPx=l.total/l.values.length/DRAG_CELL_PX;
  const wrap=name=>{const lines=[];let line='';for(const word of name.split(' ')){if((line+' '+word).trim().length>18&&line){lines.push(line);line=word}else line=(line+' '+word).trim()}if(line)lines.push(line);const result=lines.slice(0,3).map(v=>v.length>21?v.slice(0,20)+'…':v);if(lines.length>3)result[2]=result[2].slice(0,18)+'…';return result};
- const label=(p,i)=>{const [x,y]=centroid(p),small=area(p)<5000,words=small?[]:wrap(l.names[i]),start=y-(words.length*12+(enter?28:14))/2;return {x,y,words,small,start,enterY:start+Math.max(0,words.length-1)*12+(small?24:40)}};
- const text=(l,p,i)=>(p.small?'':p.words.map((w,k)=>`<tspan x="${p.x}" dy="${k?12:0}">${esc(w)}</tspan>`).join(''))+`<tspan class="cell-score" x="${p.x}" dy="${p.small?0:19}">${fmt(l.values[i])}${l.edited[i]?'':' · ○'}</tspan>`;
+ // Quality names inside a cluster are 15% larger than cluster names (11.5 vs 10), with a matching line step.
+ const step=enter?12:14;svg.classList.toggle('qualities',!enter);
+ const label=(p,i)=>{const [x,y]=centroid(p),small=area(p)<5000,words=small?[]:wrap(l.names[i]),start=y-(words.length*step+(enter?28:16))/2;return {x,y,words,small,start,enterY:start+Math.max(0,words.length-1)*step+(small?24:40)}};
+ const text=(l,p,i)=>(p.small?'':p.words.map((w,k)=>`<tspan x="${p.x}" dy="${k?step:0}">${esc(w)}</tspan>`).join(''))+`<tspan class="cell-score" x="${p.x}" dy="${p.small?0:enter?19:21}">${fmt(l.values[i])}${l.edited[i]?'':' · ○'}</tspan>`;
  function paint(){polygons=geometry(l.shares());svg.querySelectorAll('g[data-cell]').forEach(g=>{let i=+g.dataset.cell,p=polygons[i];if(!p.length)return;let lb=label(p,i),path=g.querySelector('path'),t=g.querySelector('.cell-label'),entry=g.querySelector('.cell-enter');path.setAttribute('d','M'+p.map(v=>v.join(',')).join('L')+'Z');path.setAttribute('fill',fill(i));path.classList.toggle('selected',i===selected);t.setAttribute('x',lb.x);t.setAttribute('y',lb.start);t.innerHTML=text(l,lb,i);if(entry){entry.setAttribute('x',lb.x);entry.setAttribute('y',lb.enterY)}})}
  polygons=geometry(l.shares());
  const hint=interactive?'Потяните область вверх или вниз для изменения.':enter?'Нажмите «Внутрь» для просмотра качеств.':'';
