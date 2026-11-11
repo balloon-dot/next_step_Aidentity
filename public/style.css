@@ -81,7 +81,7 @@ body.sheet-open main{padding-bottom:65vh}
 }
 /* Synonyms of the opened quality: a small chain that slides in under the cluster (inside the bottom sheet on phones). */
 .synonyms{margin:0 0 14px;animation:chain-in .25s ease-out}@keyframes chain-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}@media(prefers-reduced-motion:reduce){.synonyms{animation:none}}
-.synonym-chain{font-family:Manrope,Arial;font-size:var(--chain-size,11px);line-height:1.9;color:#2f6db3}.synonym-chain .sep{margin:0 7px}
+.synonym-chain{font-family:Manrope,Arial;font-size:var(--chain-size,11px);line-height:1.9;color:#2f6db3}.synonym-chain .sep{margin:0 .4em}
 .syn{display:inline;background:none;border:0;border-radius:4px;padding:4px 0;font:inherit;font-weight:400;color:inherit;text-align:left;cursor:pointer}.syn b{font-weight:800}
 .syn:not(:disabled):hover .syn-name{text-decoration:underline}.syn:disabled{opacity:1;cursor:default;color:#4f77a8}.syn.done{color:#6a7f9a}
 #cluster .synonyms{display:none}

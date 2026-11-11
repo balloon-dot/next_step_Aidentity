@@ -197,8 +197,8 @@ function synonymRow(d,c,q){
 // The diagram is fitted into a fixed-height box with empty bands above and below it; the chain moves up to its lower edge
 // and takes the size of the quality names on it.
 function hugDiagram(){const row=$('#synonym-row'),svg=$('#diagram');if(!row?.style)return;row.style.marginTop='';row.style.maxWidth='';const r=svg?.getBoundingClientRect?.();if(!r?.width)return;row.style.marginTop=-Math.max(0,(r.height-Math.min(r.height,r.width*620/700))/2)+'px';row.style.maxWidth=Math.min(r.width,r.height*700/620)+'px';
- // Exactly the size of the names on the diagram's neutral cells, which scale with it.
- row.style.setProperty?.('--chain-size',(10*Math.min(r.width/700,r.height/620)).toFixed(2)+'px')}
+ // A touch larger (×1.15) than the names on the diagram's neutral cells, and scaling with them.
+ row.style.setProperty?.('--chain-size',(11.5*Math.min(r.width/700,r.height/620)).toFixed(2)+'px')}
 globalThis.addEventListener?.('resize',()=>hugDiagram());
 function applySynonym(c,q){
  const d=current(),key=c+':'+q,left=synonyms.change-(synonyms.applied[key]||0);if(!synonyms.cell||Math.abs(left)<.05)return;
