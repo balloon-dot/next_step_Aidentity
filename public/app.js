@@ -190,21 +190,18 @@ const signed=v=>(v>0?'+':'−')+fmt(Math.abs(v));
 function synonymRow(d,c,q){
  const catalog=catalogOf(d),list=synonymsOf(catalog,c,q);if(!list.length)return '';
  const name=catalog.clusters[c].qualities[q].name,change=synonyms.cell===c+':'+q?synonyms.change:0,moved=Math.abs(change)>=.05;
- const item=([a,b])=>{const left=change-(synonyms.applied[a+':'+b]||0),ready=moved&&Math.abs(left)>=.05,done=moved&&!ready,syn=catalog.clusters[a].qualities[b].name;
-  return `<button class="synonym${done?' done':''}" ${ready?'':'disabled'} onclick="applySynonym(${a},${b})" aria-label="${esc(syn)}: ${fmt(d.qualities[a][b])}${ready?', изменить на '+signed(left):''}"><span>${esc(syn)}</span><b>${fmt(d.qualities[a][b])}</b>${ready?`<em>${signed(left)}</em>`:done?'<em>✓</em>':''}${a!==c?`<small>${esc(catalog.clusters[a].name)}</small>`:''}</button>`};
- const hint=moved?`Нажмите на синоним, чтобы изменить его на ${signed(change)}, как «${esc(name)}».`:`Измените «${esc(name)}» — и одним нажатием примените то же изменение к синонимам.`;
- return `<section class="synonyms"><div class="synonyms-title">Синонимы</div><p class="synonyms-hint">${hint}</p><div class="synonym-list">${list.map(item).join('')}</div></section>`;
+ const item=([a,b])=>{const left=change-(synonyms.applied[a+':'+b]||0),ready=moved&&Math.abs(left)>=.05,done=moved&&!ready,syn=catalog.clusters[a].qualities[b].name,weight=fmt(d.qualities[a][b]),from=a!==c?esc(catalog.clusters[a].name)+', ':'';
+  return `<button class="syn${done?' done':''}" ${ready?'':'disabled'} onclick="applySynonym(${a},${b})" title="${ready?'Нажмите, чтобы изменить на '+signed(left)+', как «'+esc(name)+'»':done?'Уже изменено так же, как «'+esc(name)+'»':'Измените «'+esc(name)+'», и одним нажатием можно будет изменить это качество так же'}" aria-label="${esc(syn)}, ${weight}${ready?', изменить на '+signed(left):''}"><span class="syn-name">${esc(syn)}</span> (${from}${weight})${ready?` <b>(${signed(left)})</b>`:done?' <b>(✓)</b>':''}</button>`};
+ return `<div class="synonyms" role="group" aria-label="Синонимы качества «${esc(name)}»"><span class="synonym-chain">${list.map(item).join('<span class="sep" aria-hidden="true">·</span>')}</span></div>`;
 }
 function applySynonym(c,q){
  const d=current(),key=c+':'+q,left=synonyms.change-(synonyms.applied[key]||0);if(!synonyms.cell||Math.abs(left)<.05)return;
  setQualityScore(d,c,q,d.qualities[c][q]+left);synonyms.applied[key]=synonyms.change;
  if(rating)persistGuest();else save();if(mapView==='tail')updateTailValues();else mapPage();
 }
-// The phone sheet is as tall as its controls plus the synonyms' heading and hint; the buttons scroll inside it.
-function fitSheet(){const el=$('#cluster'),box=$('#cluster .synonyms');el.style.maxHeight='';if(!globalThis.getComputedStyle||!box||getComputedStyle(el).position!=='fixed')return;box.classList.add('measuring');const height=el.offsetHeight;box.classList.remove('measuring');el.style.maxHeight=height+'px'}
 // The panel is rebuilt after every change, so the sheet's scroll position is carried over while the same cell stays open.
 let sheetCell=null,sheetTop=0;
-function settleSheet(cell){const el=$('#cluster');fitSheet();if(sheetCell!==cell){sheetCell=cell;sheetTop=0}el.scrollTop=sheetTop;el.onscroll=()=>{sheetTop=el.scrollTop}}
+function settleSheet(cell){const el=$('#cluster');if(sheetCell!==cell){sheetCell=cell;sheetTop=0}el.scrollTop=sheetTop;el.onscroll=()=>{sheetTop=el.scrollTop}}
 function draw(d,selector='#diagram',interactive=true,at=interactive?inside:null){
  const l=level(d,at),svg=$(selector);if(!svg)return;
  const fills=['#94b59a','#a2bda0','#82aa93','#b0c7a4'],neutral=['#e2e8dc','#dce5d5','#e9ecdf','#d6e1d0','#e4e9dc'];

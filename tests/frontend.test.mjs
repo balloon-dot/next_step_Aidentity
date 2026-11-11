@@ -94,14 +94,14 @@ test('Pressing a synonym gives it the same difference once, through the usual cl
  applySynonym(ac,aq);let alt=d.qualities[ac][aq]-altAtPress,altSum=d.qualities[ac].reduce((a,b)=>a+b,0),flag=d.qedited[ac][aq];
  adjust(0,d.qualities[c][q]+10);let more=synonyms.change,resp2At=d.qualities[rc][rq];applySynonym(rc,rq);let resp2=d.qualities[rc][rq]-resp2At;
  return {before,change,row,respAtPress,resp,kindAfter,clusterSum,changeAfter,again,alt,altSum,flag,more,resp2,rowDone:synonymRow(d,c,q)}})()`,ctx);
- assert.equal(r.before.resp,40);assert.equal(Math.round(r.change*1e6)/1e6,20,'the change is the difference since opening');assert.ok(r.row.includes('<em>+20</em>'));assert.ok(r.row.includes('Альтруизм и самоотдача'),'other clusters are named');
+ assert.equal(r.before.resp,40);assert.equal(Math.round(r.change*1e6)/1e6,20,'the change is the difference since opening');assert.ok(r.row.includes('<b>(+20)</b>'));assert.ok(r.row.includes('(Альтруизм и самоотдача, 50)'),'other clusters are named');assert.ok(r.row.includes('<span class="sep" aria-hidden="true">·</span>'),'a chain joined by middle dots');
  assert.ok(r.respAtPress<40,'its neighbour grew, so it gave up points as usual');assert.equal(Math.round((r.resp-r.respAtPress)*1e6)/1e6,20,'the same +20 on top of its value at the press');assert.ok(r.kindAfter<70,'the cluster shares its budget as usual');assert.ok(Math.abs(r.clusterSum-350)<1e-9);assert.equal(Math.round(r.changeAfter*1e6)/1e6,20,'a synonym does not change the copied difference');
  assert.equal(r.again,r.resp,'a second press adds nothing');assert.equal(Math.round(r.alt*1e6)/1e6,20,'a synonym in another cluster gets +20 too');assert.ok(Math.abs(r.altSum-200)<1e-9);assert.equal(r.flag,true);
- assert.equal(Math.round(r.more*1e6)/1e6,30);assert.equal(Math.round(r.resp2*1e6)/1e6,10,'only the new part of a later change is added');assert.ok(r.rowDone.includes('✓'));
+ assert.equal(Math.round(r.more*1e6)/1e6,30);assert.equal(Math.round(r.resp2*1e6)/1e6,10,'only the new part of a later change is added');assert.ok(r.rowDone.includes('(✓)'));
 });
 test('Synonyms wait for a change, start over for another quality, and count for reviewers as their own',()=>{let ctx=frontend('#invite=test');let r=vm.runInContext(`(()=>{${FIND}mapPage=()=>{};persistGuest=()=>{};guest=fresh();reviewChanges=freshReviewChanges();let owner=JSON.stringify(state.self.qualities),[c,q]=at('доброта'),[rc,rq]=at('отзывчивость');inside=c;
  selectCell(q);let idle=synonymRow(guest,c,q),idleApply=(applySynonym(rc,rq),guest.qualities[rc][rq]);adjust(0,60);applySynonym(rc,rq);let reviewed=reviewChanges.qualities[rc][rq],val=guest.qualities[rc][rq];
  selectCell(rq);let other=synonyms.change;selectCell(q);let back=synonyms.change;clearClusterSelection();let cleared=synonyms.cell;
- return {idle:idle.includes('disabled')&&!idle.includes('<em>'),idleApply,reviewed,val,other,back,cleared,owner:JSON.stringify(state.self.qualities)===owner}})()`,ctx);
+ return {idle:idle.includes('disabled')&&!idle.includes('<b>'),idleApply,reviewed,val,other,back,cleared,owner:JSON.stringify(state.self.qualities)===owner}})()`,ctx);
  assert.equal(r.idle,true,'before a change the buttons do nothing');assert.equal(r.idleApply,50);assert.equal(r.reviewed,true);assert.ok(r.val>50);assert.equal(r.other,0,'another quality starts from zero');assert.equal(r.back,0);assert.equal(r.cleared,null);assert.equal(r.owner,true);
 });
